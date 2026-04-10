@@ -1,16 +1,16 @@
 from typing import Dict, List
-
+from src.retrieval.reranker import Reranker
 from src.generation.llm_client import LLMClient
 from src.generation.prompt_builder import build_prompt
 from src.retrieval.retriever import Retriever
 
 
 class QAPipeline:
-    def __init__(self, model_name: str = "BAAI/bge-small-en", llm_mode: str = "hf"):
+    def __init__(self, model_name: str = "BAAI/bge-large-en", llm_mode: str = "hf"):
         self.retriever = Retriever(model_name=model_name)
         self.llm_client = LLMClient(mode=llm_mode)
         self.is_ready = False
-
+        self.reranker = Reranker()
     def build_knowledge_base(self, chunks: List[Dict]) -> None:
         if not chunks:
             raise ValueError("Chunks cannot be empty")
@@ -26,6 +26,7 @@ class QAPipeline:
             raise ValueError("Query cannot be empty")
 
         retrieved_contexts = self.retriever.retrieve(query, top_k=top_k)
+        retrieved_contexts = self.reranker.rerank(query, retrieved_contexts)
         prompt = build_prompt(query, retrieved_contexts)
         answer = self.llm_client.generate(prompt)
 

@@ -5,7 +5,7 @@ from src.retrieval.vector_store import VectorStore
 
 
 class Retriever:
-    def __init__(self, model_name: str = "BAAI/bge-small-en"):
+    def __init__(self, model_name: str = "BAAI/bge-large-en"):
         self.embedder = Embedder(model_name=model_name)
         self.vector_store = None
         self.chunks: List[Dict] = []
