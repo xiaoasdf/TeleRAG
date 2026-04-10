@@ -11,6 +11,7 @@ class QAPipeline:
         self.llm_client = LLMClient(mode=llm_mode)
         self.is_ready = False
         self.reranker = Reranker()
+
     def build_knowledge_base(self, chunks: List[Dict]) -> None:
         if not chunks:
             raise ValueError("Chunks cannot be empty")
@@ -37,9 +38,9 @@ class QAPipeline:
                     "chunk_id": ctx.get("chunk_id"),
                     "source": ctx.get("source"),
                     "score": ctx.get("score"),
+                    "rerank_score": ctx.get("rerank_score"),
                 }
             )
-
         return {
             "query": query,
             "answer": answer,
