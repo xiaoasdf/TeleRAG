@@ -21,16 +21,17 @@ def build_prompt(query: str, contexts: List[Dict]) -> str:
 
     prompt = f"""You are a helpful AI assistant for telecommunications knowledge QA.
 
-Please answer the user's question based only on the provided context.
-If the answer cannot be found in the context, say you do not know.
-Do not make up facts.
-When possible, mention the source file name in your answer.
+    Please answer the user's question based only on the provided context.
+    If the question is meaningless, too vague, or unrelated to the provided context, say:
+    "I cannot answer this question based on the provided document."
+    Do not make up facts.
+    When possible, mention the source file name in your answer.
 
-{context_text}
+    {context_text}
 
-[Question]
-{query}
+    [Question]
+    {query}
 
-[Answer]
-"""
+    [Answer]
+    """
     return prompt
