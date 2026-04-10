@@ -6,7 +6,7 @@ from src.retrieval.retriever import Retriever
 
 
 class QAPipeline:
-    def __init__(self, model_name: str = "BAAI/bge-small-en", llm_mode: str = "mock"):
+    def __init__(self, model_name: str = "BAAI/bge-small-en", llm_mode: str = "hf"):
         self.retriever = Retriever(model_name=model_name)
         self.llm_client = LLMClient(mode=llm_mode)
         self.is_ready = False

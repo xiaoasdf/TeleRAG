@@ -5,7 +5,7 @@ from src.pipeline.index_pipeline import build_chunks_from_file
 import os
 pipeline = QAPipeline()
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
-file_path = os.path.join(BASE_DIR, "data", "raw", "test.txt")
+file_path = os.path.join(BASE_DIR, "data", "raw", "test.pdf")
 chunks = build_chunks_from_file(file_path)
 pipeline.build_knowledge_base(chunks)
 

@@ -1,37 +1,37 @@
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+
+
 class LLMClient:
-    def __init__(self, mode: str = "mock"):
+    def __init__(self, mode: str = "hf"):
         self.mode = mode
+
+        if self.mode == "hf":
+            model_name = "google/flan-t5-base"
+            self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+            self.model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
 
     def generate(self, prompt: str) -> str:
         if not prompt.strip():
             raise ValueError("Prompt cannot be empty")
 
-        if self.mode == "mock":
-            return self._mock_generate(prompt)
+        if self.mode == "hf":
+            return self._hf_generate(prompt)
         else:
             raise ValueError(f"Unsupported mode: {self.mode}")
 
-    def _mock_generate(self, prompt: str) -> str:
-        """
-        简单 mock 版本：
-        从 prompt 中提取一点上下文，返回一个模拟回答。
-        目的是先把 QA 流程打通。
-        """
-        lines = prompt.splitlines()
-        context_lines = []
+    def _hf_generate(self, prompt: str) -> str:
+        inputs = self.tokenizer(
+            prompt,
+            return_tensors="pt",
+            truncation=True,
+            max_length=512
+        )
 
-        for line in lines:
-            if line.startswith("[Context"):
-                continue
-            if line.startswith("[Question]") or line.startswith("[Answer]"):
-                continue
-            if "(source:" in line:
-                continue
-            if line.strip():
-                context_lines.append(line.strip())
+        outputs = self.model.generate(
+            **inputs,
+            max_new_tokens=128,
+            do_sample=False
+        )
 
-        if context_lines:
-            context_summary = context_lines[:2]
-            joined = " ".join(context_summary)
-            return f"Based on the retrieved context, the answer is: {joined}"
-        return "I do not know based on the provided context."
+        answer = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+        return answer

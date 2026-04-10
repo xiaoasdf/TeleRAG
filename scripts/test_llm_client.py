@@ -18,7 +18,7 @@ What is beamforming?
 [Answer]
 """
 
-client = LLMClient(mode="mock")
+client = LLMClient(mode="hf")
 answer = client.generate(prompt)
 
 print(answer)
