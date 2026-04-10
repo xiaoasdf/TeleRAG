@@ -4,7 +4,7 @@ from src.generation.llm_client import DEFAULT_LLM_MODEL, LLMClient
 
 
 def test_llm_client_default_model_name():
-    assert LLMClient.__init__.__defaults__ == ("hf", DEFAULT_LLM_MODEL)
+    assert LLMClient.__init__.__defaults__ == ("hf", DEFAULT_LLM_MODEL, 192, None)
 
 
 def test_llm_client_mock():
@@ -12,6 +12,66 @@ def test_llm_client_mock():
     answer = client.generate("hello")
     assert isinstance(answer, str)
     assert len(answer) > 0
+
+
+def test_llm_client_moves_model_and_inputs_to_device(monkeypatch):
+    class FakeTensor:
+        def __init__(self):
+            self.moved_to = None
+            self.shape = (1, 3)
+
+        def to(self, device):
+            self.moved_to = device
+            return self
+
+        def __len__(self):
+            return 3
+
+    class FakeTokenizer:
+        pad_token_id = 0
+        eos_token_id = 1
+        pad_token = "<pad>"
+        eos_token = "</s>"
+
+        def __call__(self, prompt, return_tensors=None, truncation=None, max_length=None):
+            return {"input_ids": FakeTensor()}
+
+        def decode(self, tokens, skip_special_tokens=True):
+            return "generated answer"
+
+    class FakeSeq2SeqModel:
+        def __init__(self):
+            self.device = None
+
+        def to(self, device):
+            self.device = device
+            return self
+
+        def generate(self, **kwargs):
+            return [[101, 102]]
+
+    class FakeConfig:
+        is_encoder_decoder = True
+        architectures = ["MT5ForConditionalGeneration"]
+
+    fake_model = FakeSeq2SeqModel()
+
+    monkeypatch.setattr(
+        "src.generation.llm_client.AutoTokenizer.from_pretrained",
+        lambda model_name: FakeTokenizer(),
+    )
+    monkeypatch.setattr(
+        "src.generation.llm_client.AutoConfig.from_pretrained",
+        lambda model_name: FakeConfig(),
+    )
+    monkeypatch.setattr(
+        "src.generation.llm_client.AutoModelForSeq2SeqLM.from_pretrained",
+        lambda model_name: fake_model,
+    )
+
+    client = LLMClient(mode="hf", device="cuda")
+    assert client.generate("hello") == "generated answer"
+    assert fake_model.device == "cuda"
 
 
 def test_llm_client_seq2seq_is_lazy_loaded(monkeypatch):
@@ -307,3 +367,137 @@ def test_llm_client_strips_prompt_artifacts_from_answer(monkeypatch):
 
     client = LLMClient(mode="hf")
     assert client.generate("hello") == "Beamforming directs signals toward a target."
+
+
+def test_llm_client_trims_hr_chat_tail(monkeypatch):
+    class FakeTokenizer:
+        pad_token_id = 0
+        eos_token_id = 1
+        pad_token = "<pad>"
+        eos_token = "</s>"
+
+        def __call__(self, prompt, return_tensors=None, truncation=None, max_length=None):
+            return {"input_ids": [[1, 2, 3]]}
+
+        def decode(self, tokens, skip_special_tokens=True):
+            return (
+                "Beamforming is a signal processing technique used to focus waves toward a desired direction. "
+                "It is widely used in radar and wireless communications. "
+                "Human resources department: Assistant: To provide you with accurate information about human resource management practices, "
+                "could you please specify your location?"
+            )
+
+    class FakeSeq2SeqModel:
+        def generate(self, **kwargs):
+            return [[101, 102]]
+
+    class FakeConfig:
+        is_encoder_decoder = True
+        architectures = ["MT5ForConditionalGeneration"]
+
+    monkeypatch.setattr(
+        "src.generation.llm_client.AutoTokenizer.from_pretrained",
+        lambda model_name: FakeTokenizer(),
+    )
+    monkeypatch.setattr(
+        "src.generation.llm_client.AutoConfig.from_pretrained",
+        lambda model_name: FakeConfig(),
+    )
+    monkeypatch.setattr(
+        "src.generation.llm_client.AutoModelForSeq2SeqLM.from_pretrained",
+        lambda model_name: FakeSeq2SeqModel(),
+    )
+
+    client = LLMClient(mode="hf")
+    assert (
+        client.generate("hello")
+        == "Beamforming is a signal processing technique used to focus waves toward a desired direction. It is widely used in radar and wireless communications."
+    )
+
+
+def test_llm_client_drops_unfinished_trailing_sentence(monkeypatch):
+    class FakeTokenizer:
+        pad_token_id = 0
+        eos_token_id = 1
+        pad_token = "<pad>"
+        eos_token = "</s>"
+
+        def __call__(self, prompt, return_tensors=None, truncation=None, max_length=None):
+            return {"input_ids": [[1, 2, 3]]}
+
+        def decode(self, tokens, skip_special_tokens=True):
+            return (
+                "Beamforming is a signal processing technique used to steer energy in a desired direction. "
+                "It improves signal strength and reduces interference. These features"
+            )
+
+    class FakeSeq2SeqModel:
+        def generate(self, **kwargs):
+            return [[101, 102]]
+
+    class FakeConfig:
+        is_encoder_decoder = True
+        architectures = ["MT5ForConditionalGeneration"]
+
+    monkeypatch.setattr(
+        "src.generation.llm_client.AutoTokenizer.from_pretrained",
+        lambda model_name: FakeTokenizer(),
+    )
+    monkeypatch.setattr(
+        "src.generation.llm_client.AutoConfig.from_pretrained",
+        lambda model_name: FakeConfig(),
+    )
+    monkeypatch.setattr(
+        "src.generation.llm_client.AutoModelForSeq2SeqLM.from_pretrained",
+        lambda model_name: FakeSeq2SeqModel(),
+    )
+
+    client = LLMClient(mode="hf")
+    assert (
+        client.generate("hello")
+        == "Beamforming is a signal processing technique used to steer energy in a desired direction. It improves signal strength and reduces interference."
+    )
+
+
+def test_llm_client_drops_comma_terminated_tail(monkeypatch):
+    class FakeTokenizer:
+        pad_token_id = 0
+        eos_token_id = 1
+        pad_token = "<pad>"
+        eos_token = "</s>"
+
+        def __call__(self, prompt, return_tensors=None, truncation=None, max_length=None):
+            return {"input_ids": [[1, 2, 3]]}
+
+        def decode(self, tokens, skip_special_tokens=True):
+            return (
+                "Beamforming improves signal directionality in wireless systems. "
+                "It helps focus energy toward desired users. Additionally, HRMS often includes modules for payroll administration,"
+            )
+
+    class FakeSeq2SeqModel:
+        def generate(self, **kwargs):
+            return [[101, 102]]
+
+    class FakeConfig:
+        is_encoder_decoder = True
+        architectures = ["MT5ForConditionalGeneration"]
+
+    monkeypatch.setattr(
+        "src.generation.llm_client.AutoTokenizer.from_pretrained",
+        lambda model_name: FakeTokenizer(),
+    )
+    monkeypatch.setattr(
+        "src.generation.llm_client.AutoConfig.from_pretrained",
+        lambda model_name: FakeConfig(),
+    )
+    monkeypatch.setattr(
+        "src.generation.llm_client.AutoModelForSeq2SeqLM.from_pretrained",
+        lambda model_name: FakeSeq2SeqModel(),
+    )
+
+    client = LLMClient(mode="hf")
+    assert (
+        client.generate("hello")
+        == "Beamforming improves signal directionality in wireless systems. It helps focus energy toward desired users."
+    )

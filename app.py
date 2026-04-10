@@ -6,6 +6,7 @@ import streamlit as st
 from src.generation.llm_client import DEFAULT_LLM_MODEL
 from src.pipeline.index_pipeline import build_chunks_from_file
 from src.pipeline.qa_pipeline import QAPipeline
+from src.runtime import get_compute_device
 
 
 def is_discouraged_model_name(model_name: str) -> bool:
@@ -15,8 +16,68 @@ def is_discouraged_model_name(model_name: str) -> bool:
 
 st.set_page_config(page_title="TeleRAG", page_icon="📚")
 
-st.title("📚 TeleRAG")
-st.caption("RAG 问答系统，默认使用更适合中英技术问答的指令模型。")
+st.markdown(
+    """
+    <style>
+    .app-shell {
+        padding: 1rem 0 0.5rem 0;
+    }
+    .hero-card {
+        background: linear-gradient(135deg, #f3f8ff 0%, #eef6ee 100%);
+        border: 1px solid #d8e6dc;
+        border-radius: 18px;
+        padding: 1.2rem 1.4rem;
+        margin-bottom: 1rem;
+    }
+    .hero-title {
+        font-size: 1.8rem;
+        font-weight: 700;
+        margin-bottom: 0.2rem;
+        color: #17324d;
+    }
+    .hero-subtitle {
+        color: #496176;
+        font-size: 0.98rem;
+    }
+    .status-strip {
+        background: #fbfcf7;
+        border: 1px solid #e2e7d7;
+        border-radius: 14px;
+        padding: 0.8rem 1rem;
+        margin: 0.8rem 0 1rem 0;
+    }
+    .section-card {
+        background: #ffffff;
+        border: 1px solid #e5e8eb;
+        border-radius: 16px;
+        padding: 1rem 1.1rem;
+        margin-bottom: 0.9rem;
+    }
+    .section-title {
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: #1c3342;
+        margin-bottom: 0.55rem;
+    }
+    .meta-text {
+        color: #566b78;
+        font-size: 0.92rem;
+    }
+    </style>
+    <div class="app-shell"></div>
+    """,
+    unsafe_allow_html=True,
+)
+
+st.markdown(
+    """
+    <div class="hero-card">
+        <div class="hero-title">TeleRAG</div>
+        <div class="hero-subtitle">面向技术文档的 RAG 问答工具，支持更快的 GPU 自动检测与更紧凑的三段式结果展示。</div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 if "pipeline" not in st.session_state:
     st.session_state.pipeline = None
@@ -26,6 +87,8 @@ if "chunk_count" not in st.session_state:
     st.session_state.chunk_count = 0
 if "llm_model_name" not in st.session_state:
     st.session_state.llm_model_name = DEFAULT_LLM_MODEL
+if "last_result" not in st.session_state:
+    st.session_state.last_result = None
 
 
 def save_uploaded_file(uploaded_file) -> str:
@@ -67,6 +130,7 @@ with st.sidebar:
         st.session_state.current_file = None
         st.session_state.chunk_count = 0
         st.session_state.llm_model_name = llm_model_name
+        st.session_state.last_result = None
         st.success("知识库已清空。")
 
     if build_button:
@@ -88,6 +152,7 @@ with st.sidebar:
                 st.session_state.current_file = uploaded_file.name
                 st.session_state.chunk_count = len(chunks)
                 st.session_state.llm_model_name = llm_model_name
+                st.session_state.last_result = None
 
                 st.success(f"知识库构建完成：{uploaded_file.name}")
                 st.info(f"共生成 {len(chunks)} 个 chunks。首次提问时才会加载生成模型。")
@@ -99,11 +164,34 @@ st.subheader("问答区域")
 if st.session_state.pipeline is None:
     st.info("请先在左侧上传文档，并点击“构建知识库”。")
 
+device_label = get_compute_device()
+vector_backend = "auto"
+if st.session_state.pipeline and st.session_state.pipeline.retriever.vector_store:
+    device_label = st.session_state.pipeline.device
+    vector_backend = st.session_state.pipeline.retriever.vector_store.index_backend
+
 if st.session_state.current_file:
-    st.success(
-        f"当前知识库：{st.session_state.current_file} | "
-        f"chunks: {st.session_state.chunk_count} | "
-        f"LLM: {st.session_state.llm_model_name}"
+    st.markdown(
+        (
+            '<div class="status-strip">'
+            f"<strong>当前知识库</strong>: {st.session_state.current_file} &nbsp;|&nbsp; "
+            f"<strong>chunks</strong>: {st.session_state.chunk_count} &nbsp;|&nbsp; "
+            f"<strong>LLM</strong>: {st.session_state.llm_model_name} &nbsp;|&nbsp; "
+            f"<strong>Device</strong>: {device_label} &nbsp;|&nbsp; "
+            f"<strong>FAISS</strong>: {vector_backend}"
+            "</div>"
+        ),
+        unsafe_allow_html=True,
+    )
+else:
+    st.markdown(
+        (
+            '<div class="status-strip">'
+            f"<strong>Device</strong>: {device_label} &nbsp;|&nbsp; "
+            "<strong>FAISS</strong>: auto"
+            "</div>"
+        ),
+        unsafe_allow_html=True,
     )
 
 with st.form("qa_form", clear_on_submit=False):
@@ -121,41 +209,32 @@ if ask_button:
     else:
         try:
             with st.spinner("模型正在思考中..."):
-                result = st.session_state.pipeline.ask(query, top_k=top_k)
-
-            col1, col2 = st.columns(2)
-
-            with col1:
-                st.markdown("### 回答")
-                st.write(result["answer"])
-
-                st.markdown("### 检索到的文本片段")
-                for ctx in result["retrieved_contexts"]:
-                    rerank_score = ctx.get("rerank_score")
-                    title = (
-                        f"{ctx['chunk_id']} | {ctx['source']} | score={ctx['score']:.4f}"
-                    )
-                    if rerank_score is not None:
-                        title += f" | rerank={rerank_score:.4f}"
-
-                    with st.expander(title):
-                        st.write(ctx["text"])
-
-            with col2:
-                st.markdown("### 来源")
-                for item in result["sources"]:
-                    text = (
-                        f"- **source**: {item['source']}\n"
-                        f"  \n**chunk_id**: {item['chunk_id']}\n"
-                        f"  \n**score**: {item['score']:.4f}"
-                    )
-                    if item.get("rerank_score") is not None:
-                        text += f"\n  \n**rerank_score**: {item['rerank_score']:.4f}"
-
-                    st.write(text)
-
-                st.markdown("### Prompt（调试用）")
-                with st.expander("查看 Prompt"):
-                    st.text(result["prompt"])
+                st.session_state.last_result = st.session_state.pipeline.ask(query, top_k=top_k)
         except Exception as e:
             st.error(f"提问失败：{e}")
+
+if st.session_state.last_result:
+    result = st.session_state.last_result
+
+    with st.container(border=True):
+        st.markdown('<div class="section-title">回答</div>', unsafe_allow_html=True)
+        st.write(result["answer"])
+
+    with st.container(border=True):
+        st.markdown('<div class="section-title">检索到的文本片段</div>', unsafe_allow_html=True)
+        for ctx in result["retrieved_contexts"]:
+            rerank_score = ctx.get("rerank_score")
+            title = f"{ctx['chunk_id']} | {ctx['source']} | score={ctx['score']:.4f}"
+            if rerank_score is not None:
+                title += f" | rerank={rerank_score:.4f}"
+
+            with st.expander(title):
+                st.write(ctx["text"])
+
+    with st.container(border=True):
+        st.markdown('<div class="section-title">来源</div>', unsafe_allow_html=True)
+        for item in result["sources"]:
+            source_line = f"source={item['source']} | chunk_id={item['chunk_id']} | score={item['score']:.4f}"
+            if item.get("rerank_score") is not None:
+                source_line += f" | rerank={item['rerank_score']:.4f}"
+            st.markdown(f'<div class="meta-text">{source_line}</div>', unsafe_allow_html=True)

@@ -2,11 +2,13 @@ from typing import Dict, List
 
 from src.retrieval.embedder import Embedder
 from src.retrieval.vector_store import VectorStore
+from src.runtime import get_compute_device
 
 
 class Retriever:
-    def __init__(self, model_name: str = "BAAI/bge-large-en"):
-        self.embedder = Embedder(model_name=model_name)
+    def __init__(self, model_name: str = "BAAI/bge-m3", device: str | None = None):
+        self.device = device or get_compute_device()
+        self.embedder = Embedder(model_name=model_name, device=self.device)
         self.vector_store = None
         self.chunks: List[Dict] = []
 
@@ -18,7 +20,7 @@ class Retriever:
         texts = [chunk["text"] for chunk in chunks]
         embeddings = self.embedder.encode_texts(texts)
 
-        self.vector_store = VectorStore(dim=embeddings.shape[1])
+        self.vector_store = VectorStore(dim=embeddings.shape[1], device=self.device)
         self.vector_store.add(embeddings, chunks)
 
     def retrieve(self, query: str, top_k: int = 3) -> List[Dict]:

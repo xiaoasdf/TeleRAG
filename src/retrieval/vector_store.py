@@ -3,12 +3,32 @@ from typing import Dict, List, Tuple
 import faiss
 import numpy as np
 
+from src.runtime import faiss_supports_gpu, get_compute_device
+
 
 class VectorStore:
-    def __init__(self, dim: int):
+    def __init__(self, dim: int, device: str | None = None):
         self.dim = dim
-        self.index = faiss.IndexFlatIP(dim)
+        self.device = device or get_compute_device()
+        self.index_backend = "cpu"
+        self.gpu_resources = None
+        self.index = self._build_index(dim)
         self.metadata: List[Dict] = []
+
+    def _build_index(self, dim: int):
+        cpu_index = faiss.IndexFlatIP(dim)
+
+        if self.device != "cuda" or not faiss_supports_gpu():
+            return cpu_index
+
+        try:
+            self.gpu_resources = faiss.StandardGpuResources()
+            self.index_backend = "gpu"
+            return faiss.index_cpu_to_gpu(self.gpu_resources, 0, cpu_index)
+        except Exception:
+            self.gpu_resources = None
+            self.index_backend = "cpu"
+            return cpu_index
 
     def add(self, embeddings: np.ndarray, metadata: List[Dict]) -> None:
         if len(embeddings) != len(metadata):

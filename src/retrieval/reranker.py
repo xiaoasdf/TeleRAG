@@ -1,11 +1,20 @@
 from sentence_transformers import CrossEncoder
 
+from src.runtime import get_compute_device
+
 
 class Reranker:
-    def __init__(self):
-        self.model = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
+    def __init__(self, model_name: str = "BAAI/bge-reranker-v2-m3", device: str | None = None):
+        self.model_name = model_name
+        self.device = device or get_compute_device()
+        self.model = None
+
+    def _ensure_model_loaded(self) -> None:
+        if self.model is None:
+            self.model = CrossEncoder(self.model_name, device=self.device)
 
     def rerank(self, query, docs):
+        self._ensure_model_loaded()
         pairs = [(query, doc["text"]) for doc in docs]
         scores = self.model.predict(pairs)
 

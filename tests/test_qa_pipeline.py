@@ -8,15 +8,20 @@ def test_qa_pipeline_default_models():
         "hf",
         DEFAULT_LLM_MODEL,
         "BAAI/bge-reranker-v2-m3",
+        None,
     )
 
 
 def test_qa_pipeline_build_does_not_load_llm(monkeypatch):
     state = {"llm_inits": 0, "llm_generates": 0}
 
+    monkeypatch.setattr("src.pipeline.qa_pipeline.get_compute_device", lambda: "cpu")
+
     class FakeRetriever:
-        def __init__(self, model_name):
+        def __init__(self, model_name, device=None):
             self.model_name = model_name
+            self.device = device
+            self.vector_store = type("VectorStore", (), {"index_backend": "gpu"})()
 
         def build_index(self, chunks):
             self.chunks = chunks
@@ -32,8 +37,9 @@ def test_qa_pipeline_build_does_not_load_llm(monkeypatch):
             ]
 
     class FakeReranker:
-        def __init__(self, model_name):
+        def __init__(self, model_name, device=None):
             self.model_name = model_name
+            self.device = device
 
         def rerank(self, query, docs):
             for doc in docs:
@@ -41,10 +47,11 @@ def test_qa_pipeline_build_does_not_load_llm(monkeypatch):
             return docs
 
     class FakeLLMClient:
-        def __init__(self, mode="hf", model_name=DEFAULT_LLM_MODEL):
+        def __init__(self, mode="hf", model_name=DEFAULT_LLM_MODEL, device=None):
             state["llm_inits"] += 1
             self.mode = mode
             self.model_name = model_name
+            self.device = device
 
         def generate(self, prompt):
             state["llm_generates"] += 1
@@ -76,15 +83,21 @@ def test_qa_pipeline_build_does_not_load_llm(monkeypatch):
     assert "answer" in result
     assert "sources" in result
     assert "retrieved_contexts" in result
+    assert result["device"] == "cpu"
+    assert result["vector_backend"] == "gpu"
     assert len(result["sources"]) > 0
 
 
 def test_qa_pipeline_uses_top_two_reranked_contexts_for_prompt(monkeypatch):
     prompts = []
 
+    monkeypatch.setattr("src.pipeline.qa_pipeline.get_compute_device", lambda: "cpu")
+
     class FakeRetriever:
-        def __init__(self, model_name):
+        def __init__(self, model_name, device=None):
             self.model_name = model_name
+            self.device = device
+            self.vector_store = type("VectorStore", (), {"index_backend": "cpu"})()
 
         def build_index(self, chunks):
             self.chunks = chunks
@@ -97,8 +110,9 @@ def test_qa_pipeline_uses_top_two_reranked_contexts_for_prompt(monkeypatch):
             ]
 
     class FakeReranker:
-        def __init__(self, model_name):
+        def __init__(self, model_name, device=None):
             self.model_name = model_name
+            self.device = device
 
         def rerank(self, query, docs):
             reranked = []
@@ -109,9 +123,10 @@ def test_qa_pipeline_uses_top_two_reranked_contexts_for_prompt(monkeypatch):
             return reranked
 
     class FakeLLMClient:
-        def __init__(self, mode="hf", model_name=DEFAULT_LLM_MODEL):
+        def __init__(self, mode="hf", model_name=DEFAULT_LLM_MODEL, device=None):
             self.mode = mode
             self.model_name = model_name
+            self.device = device
 
         def generate(self, prompt):
             prompts.append(prompt)
@@ -137,3 +152,48 @@ def test_qa_pipeline_uses_top_two_reranked_contexts_for_prompt(monkeypatch):
     assert "antenna arrays" in prompts[0]
     assert "HRMS software" not in prompts[0]
     assert len(result["retrieved_contexts"]) == 3
+
+
+def test_qa_pipeline_passes_device_to_components(monkeypatch):
+    seen = {}
+
+    class FakeRetriever:
+        def __init__(self, model_name, device=None):
+            seen["retriever"] = (model_name, device)
+            self.vector_store = type("VectorStore", (), {"index_backend": "gpu"})()
+
+        def build_index(self, chunks):
+            self.chunks = chunks
+
+        def retrieve(self, query, top_k=3):
+            return [{"chunk_id": "c1", "text": "beamforming", "source": "doc1.txt", "score": 0.9}]
+
+    class FakeReranker:
+        def __init__(self, model_name, device=None):
+            seen["reranker"] = (model_name, device)
+
+        def rerank(self, query, docs):
+            for doc in docs:
+                doc["rerank_score"] = 1.0
+            return docs
+
+    class FakeLLMClient:
+        def __init__(self, mode="hf", model_name=DEFAULT_LLM_MODEL, device=None):
+            seen["llm"] = (mode, model_name, device)
+
+        def generate(self, prompt):
+            return "answer"
+
+    monkeypatch.setattr("src.pipeline.qa_pipeline.Retriever", FakeRetriever)
+    monkeypatch.setattr("src.pipeline.qa_pipeline.Reranker", FakeReranker)
+    monkeypatch.setattr("src.pipeline.qa_pipeline.LLMClient", FakeLLMClient)
+
+    pipeline = QAPipeline(device="cuda")
+    pipeline.build_knowledge_base([{"chunk_id": "c1", "text": "beamforming", "source": "doc1.txt"}])
+    result = pipeline.ask("What is beamforming?")
+
+    assert seen["retriever"] == ("BAAI/bge-m3", "cuda")
+    assert seen["reranker"] == ("BAAI/bge-reranker-v2-m3", "cuda")
+    assert seen["llm"] == ("hf", DEFAULT_LLM_MODEL, "cuda")
+    assert result["device"] == "cuda"
+    assert result["vector_backend"] == "gpu"

@@ -4,6 +4,7 @@ from src.generation.llm_client import DEFAULT_LLM_MODEL, LLMClient
 from src.generation.prompt_builder import build_prompt
 from src.retrieval.reranker import Reranker
 from src.retrieval.retriever import Retriever
+from src.runtime import get_compute_device
 
 
 class QAPipeline:
@@ -13,11 +14,13 @@ class QAPipeline:
         llm_mode: str = "hf",
         llm_model_name: str = DEFAULT_LLM_MODEL,
         reranker_model_name: str = "BAAI/bge-reranker-v2-m3",
+        device: str | None = None,
     ):
-        self.retriever = Retriever(model_name=model_name)
-        self.llm_client = LLMClient(mode=llm_mode, model_name=llm_model_name)
+        self.device = device or get_compute_device()
+        self.retriever = Retriever(model_name=model_name, device=self.device)
+        self.llm_client = LLMClient(mode=llm_mode, model_name=llm_model_name, device=self.device)
         self.is_ready = False
-        self.reranker = Reranker(model_name=reranker_model_name)
+        self.reranker = Reranker(model_name=reranker_model_name, device=self.device)
 
     def build_knowledge_base(self, chunks: List[Dict]) -> None:
         if not chunks:
@@ -54,7 +57,8 @@ class QAPipeline:
             "answer": answer,
             "sources": sources,
             "retrieved_contexts": retrieved_contexts,
-            "prompt": prompt,
+            "device": self.device,
+            "vector_backend": self.retriever.vector_store.index_backend if self.retriever.vector_store else "cpu",
         }
 
     def _select_prompt_contexts(self, contexts: List[Dict]) -> List[Dict]:

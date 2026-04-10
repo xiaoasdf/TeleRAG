@@ -10,14 +10,25 @@ from transformers import (
     AutoTokenizer,
 )
 
+from src.runtime import get_compute_device
+
 
 DEFAULT_LLM_MODEL = "Qwen/Qwen2.5-1.5B-Instruct"
+DEFAULT_MAX_NEW_TOKENS = 192
 
 
 class LLMClient:
-    def __init__(self, mode: str = "hf", model_name: str = DEFAULT_LLM_MODEL):
+    def __init__(
+        self,
+        mode: str = "hf",
+        model_name: str = DEFAULT_LLM_MODEL,
+        max_new_tokens: int = DEFAULT_MAX_NEW_TOKENS,
+        device: str | None = None,
+    ):
         self.mode = mode
         self.model_name = model_name
+        self.max_new_tokens = max_new_tokens
+        self.device = device or get_compute_device()
         self.tokenizer = None
         self.model = None
         self.config = None
@@ -65,6 +76,9 @@ class LLMClient:
         if self.tokenizer.pad_token_id is None and self.tokenizer.eos_token_id is not None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
 
+        if hasattr(self.model, "to"):
+            self.model = self.model.to(self.device)
+
         self._is_loaded = True
 
     def _is_causal_lm_config(self) -> bool:
@@ -107,16 +121,18 @@ class LLMClient:
         return self._clean_answer(answer, prompt)
 
     def _generate_seq2seq(self, prompt: str) -> str:
-        inputs = self.tokenizer(
+        inputs = self._move_inputs_to_device(
+            self.tokenizer(
             prompt,
             return_tensors="pt",
             truncation=True,
             max_length=1024,
+            )
         )
 
         outputs = self.model.generate(
             **inputs,
-            max_new_tokens=192,
+            max_new_tokens=self.max_new_tokens,
             do_sample=False,
             temperature=0.0,
             pad_token_id=self.tokenizer.pad_token_id,
@@ -125,16 +141,18 @@ class LLMClient:
         return self.tokenizer.decode(outputs[0], skip_special_tokens=True)
 
     def _generate_causal(self, prompt: str) -> str:
-        inputs = self.tokenizer(
+        inputs = self._move_inputs_to_device(
+            self.tokenizer(
             prompt,
             return_tensors="pt",
             truncation=True,
             max_length=2048,
+            )
         )
 
         outputs = self.model.generate(
             **inputs,
-            max_new_tokens=192,
+            max_new_tokens=self.max_new_tokens,
             do_sample=False,
             temperature=0.0,
             pad_token_id=self.tokenizer.pad_token_id,
@@ -151,6 +169,15 @@ class LLMClient:
         if isinstance(input_ids, list) and input_ids and isinstance(input_ids[0], list):
             return len(input_ids[0])
         return len(input_ids)
+
+    def _move_inputs_to_device(self, inputs):
+        if self.device == "cpu":
+            return inputs
+
+        moved_inputs = {}
+        for key, value in inputs.items():
+            moved_inputs[key] = value.to(self.device) if hasattr(value, "to") else value
+        return moved_inputs
 
     def _clean_answer(self, answer: str, prompt: str) -> str:
         cleaned = re.sub(r"<extra_id_\d+>", "", answer)
@@ -179,6 +206,10 @@ class LLMClient:
             r"Question\s*:",
             r"Context\s*:",
             r"Answer\s*:",
+            r"\bAssistant\s*:",
+            r"\bUser\s*:",
+            r"\bSystem\s*:",
+            r"\bHuman resources department\s*:",
         ]
 
         earliest = None
@@ -220,9 +251,12 @@ class LLMClient:
         for paragraph in paragraphs:
             normalized = paragraph.replace("\n", " ").strip()
             normalized = re.sub(r"\s+", " ", normalized)
+            normalized = self._trim_trailing_incomplete_text(normalized)
             sentences = self._split_sentences(normalized)
             merged = self._merge_short_fragments(sentences)
-            formatted.append(self._join_sentences(merged))
+            filtered = self._trim_off_topic_tail(merged)
+            filtered = self._drop_unfinished_trailing_sentence(filtered)
+            formatted.append(self._join_sentences(filtered))
         return "\n\n".join(part for part in formatted if part).strip()
 
     def _split_sentences(self, text: str) -> list[str]:
@@ -282,3 +316,69 @@ class LLMClient:
 
     def _ends_with_terminal_punctuation(self, text: str) -> bool:
         return bool(re.search(r"[.!?。！？；;]$", text))
+
+    def _trim_off_topic_tail(self, sentences: list[str]) -> list[str]:
+        trimmed = []
+        for sentence in sentences:
+            if self._looks_like_chat_or_role_artifact(sentence):
+                break
+            trimmed.append(sentence)
+        return trimmed
+
+    def _looks_like_chat_or_role_artifact(self, sentence: str) -> bool:
+        lowered = sentence.lower()
+        artifact_phrases = [
+            "assistant:",
+            "user:",
+            "system:",
+            "human resources department",
+            "could you please specify your location",
+            "different countries have varying laws",
+            "employee rights",
+            "labor market conditions",
+        ]
+        return any(phrase in lowered for phrase in artifact_phrases)
+
+    def _drop_unfinished_trailing_sentence(self, sentences: list[str]) -> list[str]:
+        if len(sentences) <= 1:
+            return sentences
+
+        last_sentence = sentences[-1]
+        if (
+            not self._ends_with_terminal_punctuation(last_sentence)
+            and self._looks_like_unfinished_fragment(last_sentence)
+        ):
+            return sentences[:-1]
+
+        return sentences
+
+    def _looks_like_unfinished_fragment(self, sentence: str) -> bool:
+        if re.search(r"[\u4e00-\u9fff]", sentence):
+            return len(sentence) <= 12
+
+        words = sentence.split()
+        if not words:
+            return True
+
+        return len(words) <= 4
+
+    def _trim_trailing_incomplete_text(self, text: str) -> str:
+        if self._ends_with_terminal_punctuation(text):
+            return text
+
+        if re.search(r"[,，;；:：]\s*$", text):
+            matches = list(re.finditer(r"[.!?。！？；;](?=\s|$)", text))
+            if matches:
+                return text[: matches[-1].end()].rstrip()
+            return re.sub(r"[,，;；:：]\s*$", "", text).rstrip()
+
+        matches = list(re.finditer(r"[.!?。！？；;](?=\s|$)", text))
+        if not matches:
+            return text
+
+        last_match = matches[-1]
+        trailing = text[last_match.end():].strip()
+        if trailing and self._looks_like_unfinished_fragment(trailing):
+            return text[: last_match.end()].rstrip()
+
+        return text

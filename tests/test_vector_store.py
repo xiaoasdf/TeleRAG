@@ -2,6 +2,43 @@ from src.retrieval.embedder import Embedder
 from src.retrieval.vector_store import VectorStore
 
 
+def test_vector_store_falls_back_to_cpu_when_gpu_unavailable(monkeypatch):
+    monkeypatch.setattr("src.retrieval.vector_store.faiss_supports_gpu", lambda: False)
+
+    store = VectorStore(dim=8, device="cuda")
+
+    assert store.index_backend == "cpu"
+
+
+def test_vector_store_uses_gpu_backend_when_supported(monkeypatch):
+    created = {"resources": 0, "moved": 0}
+
+    class FakeGpuResources:
+        def __init__(self):
+            created["resources"] += 1
+
+    def fake_index_cpu_to_gpu(resources, device_id, index):
+        created["moved"] += 1
+        return index
+
+    monkeypatch.setattr("src.retrieval.vector_store.faiss_supports_gpu", lambda: True)
+    monkeypatch.setattr(
+        "src.retrieval.vector_store.faiss.StandardGpuResources",
+        FakeGpuResources,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "src.retrieval.vector_store.faiss.index_cpu_to_gpu",
+        fake_index_cpu_to_gpu,
+        raising=False,
+    )
+
+    store = VectorStore(dim=8, device="cuda")
+
+    assert store.index_backend == "gpu"
+    assert created == {"resources": 1, "moved": 1}
+
+
 def test_vector_store_search():
     texts = [
         "Beamforming improves signal quality in wireless systems.",
