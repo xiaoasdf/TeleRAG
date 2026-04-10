@@ -1,149 +1,181 @@
-# 📡 TeleRAG：通信文档问答系统（RAG）
+# TeleRAG
 
-基于 Retrieval-Augmented Generation（RAG）的通信领域文档问答系统。  
-支持文档上传、向量检索、上下文增强生成，并提供答案来源追溯。
+面向技术文档问答的轻量级 RAG 项目。当前版本提供从文档导入、切块、向量检索、重排序到答案生成的一条完整链路，并带有可直接运行的 Streamlit 页面。
 
----
+## Highlights
 
-## 🚀 项目简介
+- 支持 `txt`、`md`、`pdf` 文档导入
+- 支持可调 `chunk_size` 与 `overlap`
+- 使用 `SentenceTransformer` 做文本向量化
+- 使用 FAISS 做 Top-K 相似度检索
+- 使用 CrossEncoder 做检索结果 rerank
+- 使用 `google/flan-t5-base` 生成最终答案
+- 返回答案、来源、检索分数和 rerank 分数
+- 提供 Web UI 和命令行示例
 
-本项目实现了一个完整的 RAG 问答流程：
+## Demo Flow
 
-用户输入问题 → 检索相关文档片段 → 构建 Prompt → 调用大模型生成答案 → 返回答案 + 来源
-
-适用于：
-
-- 通信 / AI / 技术文档问答
-- 知识库问答系统
-- LLM + 检索增强应用场景
-
----
-
-## 🧠 系统架构
-
-```
-用户问题  
-↓  
-向量检索（Retriever）  
-↓  
-Top-K 相关文本片段  
-↓  
-Prompt 构建（Prompt Builder）  
-↓  
-大模型生成（LLM）  
-↓  
-答案 + 来源返回  
+```text
+Document Upload
+    -> Document Loader
+    -> Text Chunking
+    -> Embedding
+    -> FAISS Retrieval
+    -> CrossEncoder Rerank
+    -> Prompt Builder
+    -> LLM Generation
+    -> Answer + Sources
 ```
 
----
+## Tech Stack
 
-## 🧩 核心功能
+- Python
+- Streamlit
+- sentence-transformers
+- FAISS
+- HuggingFace Transformers
+- PyPDF
 
-- 📄 文档上传（支持 txt / md / pdf）
-- 🔍 文本切分（chunk + overlap）
-- 🧠 向量化（BGE embedding）
-- 📚 相似度检索（Top-K）
-- 🤖 大模型生成（Flan-T5）
-- 📌 来源追溯（chunk_id / score）
-- 🌐 Web 界面（Streamlit）
+## Quick Start
 
----
-
-## 🖥️ 使用方式
-
-### 1️⃣ 安装依赖
+### 1. Install
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2️⃣ 启动 Web 页面
+### 2. Run Web App
 
 ```bash
 python -m streamlit run app.py
 ```
 
-打开浏览器访问：
+Open:
 
-```
+```text
 http://localhost:8501
 ```
 
-### 3️⃣ 使用流程
+### 3. Run CLI Demo
 
-1. 上传文档（txt / md / pdf）
-2. 点击「构建知识库」
-3. 输入问题
-4. 查看回答 + 来源 + 检索片段
-
----
-
-## 📂 项目结构
-
+```bash
+python scripts/cli_chat.py
 ```
+
+CLI 默认读取 `data/raw/test.pdf` 并进入交互式问答。
+
+## How It Works
+
+1. 用户上传一个 `txt`、`md` 或 `pdf` 文档
+2. `loaders.py` 解析文档内容
+3. `chunker.py` 按字符窗口切成多个 chunk
+4. `embedder.py` 将 chunk 编码为向量
+5. `vector_store.py` 用 FAISS 建立内存索引
+6. `retriever.py` 召回 Top-K 相关片段
+7. `reranker.py` 对召回结果重新排序
+8. `prompt_builder.py` 组装上下文和问题
+9. `llm_client.py` 生成答案
+10. 页面展示答案、来源和检索片段
+
+## Project Structure
+
+```text
 TeleRAG/
-├── app.py                  # Streamlit 前端
-├── data/                  # 原始文档
+├── app.py
+├── requirements.txt
+├── README.md
+├── config/
+│   └── settings.yaml
+├── data/
+│   ├── raw/
+│   └── vector_store/
+├── docs/
+│   └── plan.md
 ├── scripts/
-│   ├── cli_chat.py        # 命令行问答
-│   └── build_index.py     # 构建索引
+│   ├── build_index.py
+│   ├── cli_chat.py
+│   ├── test_chunking.py
+│   ├── test_faiss.py
+│   ├── test_llm_client.py
+│   ├── test_prompt.py
+│   ├── test_qa_pipeline.py
+│   └── test_retriever.py
 ├── src/
-│   ├── pipeline/          # RAG 主流程
-│   ├── retrieval/         # 检索模块
-│   ├── generation/        # LLM 调用
-│   └── ingestion/         # 文档处理
+│   ├── config.py
+│   ├── main.py
+│   ├── generation/
+│   │   ├── llm_client.py
+│   │   └── prompt_builder.py
+│   ├── ingestion/
+│   │   ├── chunker.py
+│   │   └── loaders.py
+│   ├── pipeline/
+│   │   ├── index_pipeline.py
+│   │   └── qa_pipeline.py
+│   └── retrieval/
+│       ├── embedder.py
+│       ├── reranker.py
+│       ├── retriever.py
+│       └── vector_store.py
+└── tests/
+    ├── test_chunker.py
+    ├── test_embedder.py
+    ├── test_llm_client.py
+    ├── test_loaders.py
+    ├── test_prompt_builder.py
+    ├── test_qa_pipeline.py
+    ├── test_retriever.py
+    └── test_vector_store.py
 ```
 
----
+## Core Modules
 
-## 🔍 示例
+### `app.py`
 
-**问题：**
+Streamlit 前端入口，负责文件上传、参数输入、知识库构建和问答结果展示。
 
-> What is beamforming?
+### `src/ingestion`
 
-**回答：**
+- `loaders.py`：读取 `txt / md / pdf`
+- `chunker.py`：切分文本并生成带 metadata 的 chunks
 
-> Beamforming 是一种信号处理技术，通过控制天线阵列的相位和幅度，实现信号在特定方向上的增强。
+### `src/retrieval`
 
-**来源：**
+- `embedder.py`：生成文本和查询向量
+- `vector_store.py`：管理 FAISS 内存索引
+- `retriever.py`：封装检索逻辑
+- `reranker.py`：对初检结果进行重排
 
-- chunk_id: xxx | score: 0.89  
-- chunk_id: xxx | score: 0.86  
+### `src/generation`
 
----
+- `prompt_builder.py`：构造 Prompt
+- `llm_client.py`：调用 HuggingFace 模型生成答案
 
-## ⚙️ 技术栈
+### `src/pipeline`
 
-- Python
-- HuggingFace Transformers
-- SentenceTransformers（BGE）
-- Streamlit
-- 向量检索（FAISS / 内存索引）
+- `index_pipeline.py`：从文件构建 chunks
+- `qa_pipeline.py`：串联检索、重排、Prompt 和生成流程
 
----
+## Testing
 
-## 🎯 项目亮点（面试重点）
+项目包含基础测试，可在本地运行：
 
-- ✅ 完整实现 RAG Pipeline（检索 + 生成）
-- ✅ 支持文档级知识库构建
-- ✅ 引入 Top-K 检索提升回答准确性
-- ✅ 提供答案来源追溯（可解释性）
-- ✅ 使用 Prompt Engineering 控制模型行为
-- ✅ 搭建 Web UI 提升交互体验
+```bash
+pytest tests
+```
 
----
+## Current Scope
 
-## 🚧 可扩展方向
+- 当前主要面向单文档问答
+- 向量索引为内存实现，未做持久化
+- `config/settings.yaml`、`src/config.py`、`src/main.py` 目前仍是预留文件
+- 仓库中有 `src/api/`、`src/utils/` 目录，但当前没有实际代码
+
+## Roadmap
 
 - 多文档知识库
-- GPU 加速 embedding
-- 更强模型（Qwen / Mistral / LLaMA）
-- 部署（Docker / 云服务）
-- 多轮对话
-
----
-
-## 👤 作者
-
-- 你的名字
+- 持久化向量存储
+- 可配置模型与参数管理
+- 基于 FastAPI 的接口层
+- 多轮对话与上下文记忆
+- 更强的中文或领域模型支持
