@@ -4,7 +4,7 @@ from src.generation.llm_client import DEFAULT_LLM_MODEL, LLMClient
 
 
 def test_llm_client_default_model_name():
-    assert LLMClient.__init__.__defaults__ == ("hf", DEFAULT_LLM_MODEL, 192, None)
+    assert LLMClient.__init__.__defaults__ == ("hf", DEFAULT_LLM_MODEL, 128, None)
 
 
 def test_llm_client_mock():
@@ -12,6 +12,11 @@ def test_llm_client_mock():
     answer = client.generate("hello")
     assert isinstance(answer, str)
     assert len(answer) > 0
+
+
+def test_llm_client_custom_max_new_tokens():
+    client = LLMClient(max_new_tokens=96)
+    assert client.max_new_tokens == 96
 
 
 def test_llm_client_moves_model_and_inputs_to_device(monkeypatch):
@@ -500,4 +505,59 @@ def test_llm_client_drops_comma_terminated_tail(monkeypatch):
     assert (
         client.generate("hello")
         == "Beamforming improves signal directionality in wireless systems. It helps focus energy toward desired users."
+    )
+
+
+def test_llm_client_trims_natural_language_topic_drift(monkeypatch):
+    class FakeTokenizer:
+        pad_token_id = 0
+        eos_token_id = 1
+        pad_token = "<pad>"
+        eos_token = "</s>"
+
+        def __call__(self, prompt, return_tensors=None, truncation=None, max_length=None):
+            return {"input_ids": [[1, 2, 3]]}
+
+        def decode(self, tokens, skip_special_tokens=True):
+            return (
+                "Beamforming is a signal processing technique used to steer and focus electromagnetic waves toward a desired direction. "
+                "It improves wireless communication performance by concentrating energy where it is needed. "
+                "Human resources management software can help organizations streamline their processes and improve employee satisfaction. "
+                "By automating tasks like scheduling and payroll calculations, HR departments can allocate more time to strategic initiatives."
+            )
+
+    class FakeSeq2SeqModel:
+        def generate(self, **kwargs):
+            return [[101, 102]]
+
+    class FakeConfig:
+        is_encoder_decoder = True
+        architectures = ["MT5ForConditionalGeneration"]
+
+    monkeypatch.setattr(
+        "src.generation.llm_client.AutoTokenizer.from_pretrained",
+        lambda model_name: FakeTokenizer(),
+    )
+    monkeypatch.setattr(
+        "src.generation.llm_client.AutoConfig.from_pretrained",
+        lambda model_name: FakeConfig(),
+    )
+    monkeypatch.setattr(
+        "src.generation.llm_client.AutoModelForSeq2SeqLM.from_pretrained",
+        lambda model_name: FakeSeq2SeqModel(),
+    )
+
+    prompt = (
+        "You are a helpful bilingual assistant for technical document question answering.\n"
+        "Context:\n"
+        "[Document 1] source=test.txt\n"
+        "Beamforming is a signal processing technique to steer, shape, and focus an electromagnetic wave using an array of sensors toward a desired direction.\n\n"
+        "Question: What is beamforming?\n"
+        "Answer:"
+    )
+
+    client = LLMClient(mode="hf")
+    assert client.generate(prompt) == (
+        "Beamforming is a signal processing technique used to steer and focus electromagnetic waves toward a desired direction. "
+        "It improves wireless communication performance by concentrating energy where it is needed."
     )

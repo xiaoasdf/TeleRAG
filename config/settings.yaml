@@ -1,0 +1,24 @@
+app:
+  project_name: TeleRAG
+
+paths:
+  data_dir: data
+  raw_data_dir: data/raw
+  vector_store_dir: data/vector_store/default
+
+models:
+  retriever: BAAI/bge-m3
+  reranker: BAAI/bge-reranker-v2-m3
+  fast_llm: Qwen/Qwen2.5-0.5B-Instruct
+  balanced_llm: Qwen/Qwen2.5-1.5B-Instruct
+  default_llm: Qwen/Qwen2.5-0.5B-Instruct
+
+pipeline:
+  chunk_size: 300
+  overlap: 50
+  top_k: 3
+  candidate_k: 5
+  rerank_top_n: 3
+  prompt_char_budget: 1200
+  enable_rerank: true
+  max_new_tokens: 128

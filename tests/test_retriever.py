@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from src.retrieval.retriever import Retriever
 
 
@@ -44,7 +46,7 @@ def test_retriever_passes_device_to_dependencies(monkeypatch):
     assert captured["vector_store"] == (4, "cuda")
 
 
-def test_retriever():
+def test_retriever(monkeypatch):
     chunks = [
         {
             "chunk_id": "c1",
@@ -69,11 +71,63 @@ def test_retriever():
         },
     ]
 
+    class FakeEmbedder:
+        def __init__(self, model_name, device=None):
+            self.model_name = model_name
+            self.device = device
+
+        def encode_texts(self, texts):
+            import numpy as np
+
+            return np.asarray(
+                [
+                    [1.0, 0.0, 0.0, 0.0],
+                    [0.0, 1.0, 0.0, 0.0],
+                    [0.2, 0.1, 0.9, 0.0],
+                ],
+                dtype="float32",
+            )
+
+        def encode_query(self, query):
+            import numpy as np
+
+            return np.asarray([1.0, 0.0, 0.0, 0.0], dtype="float32")
+
+    monkeypatch.setattr("src.retrieval.retriever.Embedder", FakeEmbedder)
+
     retriever = Retriever()
     retriever.build_index(chunks)
-
     results = retriever.retrieve("Explain beamforming in wireless communication", top_k=2)
 
     assert len(results) > 0
     assert "score" in results[0]
     assert "text" in results[0]
+    assert results[0]["chunk_id"] == "c1"
+
+
+def test_retriever_can_save_and_load_index(monkeypatch, tmp_path):
+    captured = {"save_path": None, "load_path": None}
+
+    class FakeVectorStore:
+        index_backend = "cpu"
+        metadata = [{"chunk_id": "c1", "text": "beamforming", "source": "doc1.txt"}]
+
+        def save(self, output_dir):
+            captured["save_path"] = Path(output_dir)
+
+        @classmethod
+        def load(cls, input_dir, device=None):
+            captured["load_path"] = Path(input_dir)
+            return cls()
+
+    monkeypatch.setattr("src.retrieval.retriever.VectorStore", FakeVectorStore)
+
+    retriever = Retriever()
+    retriever.vector_store = FakeVectorStore()
+
+    retriever.save_index(tmp_path)
+    retriever.load_index(tmp_path)
+
+    assert captured["save_path"] == tmp_path
+    assert captured["load_path"] == tmp_path
+    assert retriever.chunks[0]["chunk_id"] == "c1"

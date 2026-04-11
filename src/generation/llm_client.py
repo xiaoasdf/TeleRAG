@@ -14,7 +14,17 @@ from src.runtime import get_compute_device
 
 
 DEFAULT_LLM_MODEL = "Qwen/Qwen2.5-1.5B-Instruct"
-DEFAULT_MAX_NEW_TOKENS = 192
+FAST_LLM_MODEL = "Qwen/Qwen2.5-0.5B-Instruct"
+BALANCED_LLM_MODEL = DEFAULT_LLM_MODEL
+DEFAULT_MAX_NEW_TOKENS = 128
+STOPWORDS = {
+    "about", "after", "also", "and", "are", "been", "being", "between", "both", "but",
+    "can", "could", "does", "each", "from", "have", "helps", "into", "its", "many",
+    "more", "most", "much", "only", "other", "over", "same", "such", "than", "that",
+    "their", "them", "then", "there", "these", "they", "this", "those", "through",
+    "used", "using", "various", "what", "when", "where", "which", "while", "with",
+    "within", "would", "your",
+}
 
 
 class LLMClient:
@@ -192,6 +202,7 @@ class LLMClient:
         cleaned = self._normalize_whitespace(cleaned)
         cleaned = self._normalize_punctuation(cleaned)
         cleaned = self._format_sentences(cleaned)
+        cleaned = self._filter_answer_by_topic(cleaned, prompt)
 
         if not cleaned:
             return "Unable to answer from the provided context."
@@ -258,6 +269,87 @@ class LLMClient:
             filtered = self._drop_unfinished_trailing_sentence(filtered)
             formatted.append(self._join_sentences(filtered))
         return "\n\n".join(part for part in formatted if part).strip()
+
+    def _filter_answer_by_topic(self, text: str, prompt: str) -> str:
+        paragraphs = [part.strip() for part in text.split("\n\n") if part.strip()]
+        if not paragraphs:
+            return text
+
+        topic_keywords = self._extract_topic_keywords(prompt)
+        if not topic_keywords:
+            return text
+
+        filtered_paragraphs = []
+        for paragraph in paragraphs:
+            sentences = self._split_sentences(paragraph)
+            filtered_sentences = []
+            for idx, sentence in enumerate(sentences):
+                if idx == 0:
+                    filtered_sentences.append(sentence)
+                    continue
+
+                if self._looks_like_topic_match(sentence, topic_keywords):
+                    filtered_sentences.append(sentence)
+                    continue
+
+                # Once the answer drifts off-topic, drop the remaining tail.
+                break
+
+            if filtered_sentences:
+                filtered_paragraphs.append(self._join_sentences(filtered_sentences))
+
+        return "\n\n".join(filtered_paragraphs).strip() or text
+
+    def _extract_topic_keywords(self, prompt: str) -> set[str]:
+        question_match = re.search(r"Question:\s*(.+?)\nAnswer:", prompt, flags=re.DOTALL | re.IGNORECASE)
+        context_match = re.search(r"Context:\n(.+?)\n\nQuestion:", prompt, flags=re.DOTALL | re.IGNORECASE)
+
+        keywords = set()
+        if question_match:
+            keywords.update(self._keywordize(question_match.group(1)))
+        if context_match:
+            keywords.update(self._keywordize(context_match.group(1), limit=40))
+        return keywords
+
+    def _keywordize(self, text: str, limit: int | None = None) -> set[str]:
+        tokens = re.findall(r"[A-Za-z]{4,}", text.lower())
+        keywords = []
+        seen = set()
+        for token in tokens:
+            token = self._normalize_keyword(token)
+            if token in STOPWORDS or token in seen:
+                continue
+            seen.add(token)
+            keywords.append(token)
+            if limit is not None and len(keywords) >= limit:
+                break
+        return set(keywords)
+
+    def _normalize_keyword(self, token: str) -> str:
+        if len(token) > 5 and token.endswith("s") and not token.endswith("ss"):
+            return token[:-1]
+        return token
+
+    def _looks_like_topic_match(self, sentence: str, topic_keywords: set[str]) -> bool:
+        lowered = sentence.lower()
+        if self._looks_like_chat_or_role_artifact(sentence):
+            return False
+
+        sentence_keywords = self._keywordize(sentence)
+        overlap = sentence_keywords & topic_keywords
+        if len(overlap) >= 2:
+            return True
+
+        if overlap and re.search(r"\b(it|this|these|they|technology|technique|method)\b", lowered):
+            return True
+
+        if re.match(r"^(it|this|these|they)\b", lowered):
+            return True
+
+        if re.match(r"^this (technology|technique|method)\b", lowered):
+            return True
+
+        return False
 
     def _split_sentences(self, text: str) -> list[str]:
         matches = re.findall(r".*?(?:[。！？；]|[.!?](?=\s|$)|$)", text)

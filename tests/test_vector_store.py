@@ -1,4 +1,5 @@
-from src.retrieval.embedder import Embedder
+import numpy as np
+
 from src.retrieval.vector_store import VectorStore
 
 
@@ -40,28 +41,46 @@ def test_vector_store_uses_gpu_backend_when_supported(monkeypatch):
 
 
 def test_vector_store_search():
-    texts = [
-        "Beamforming improves signal quality in wireless systems.",
-        "DVB-S2 is used in satellite communication.",
-        "Dynamic TDD allows flexible uplink and downlink allocation.",
-    ]
-
     metadata = [
-        {"chunk_id": "c1", "text": texts[0], "source": "doc1.txt"},
-        {"chunk_id": "c2", "text": texts[1], "source": "doc2.txt"},
-        {"chunk_id": "c3", "text": texts[2], "source": "doc3.txt"},
+        {"chunk_id": "c1", "text": "Beamforming improves signal quality.", "source": "doc1.txt"},
+        {"chunk_id": "c2", "text": "DVB-S2 is used in satellite communication.", "source": "doc2.txt"},
+        {"chunk_id": "c3", "text": "Dynamic TDD allows flexible allocation.", "source": "doc3.txt"},
     ]
-
-    embedder = Embedder()
-    embeddings = embedder.encode_texts(texts)
-
-    store = VectorStore(dim=embeddings.shape[1])
+    embeddings = np.asarray(
+        [
+            [1.0, 0.1, 0.0, 0.0],
+            [0.1, 1.0, 0.0, 0.0],
+            [0.2, 0.1, 0.9, 0.0],
+        ],
+        dtype="float32",
+    )
+    store = VectorStore(dim=4)
     store.add(embeddings, metadata)
-
-    query = "What is beamforming in wireless communication?"
-    query_vec = embedder.encode_query(query)
+    query_vec = np.asarray([1.0, 0.0, 0.0, 0.0], dtype="float32")
 
     results = store.search(query_vec, top_k=2)
 
     assert len(results) > 0
-    assert results[0][0]["chunk_id"] in {"c1", "c2", "c3"}
+    assert results[0][0]["chunk_id"] == "c1"
+
+
+def test_vector_store_save_and_load(tmp_path):
+    metadata = [
+        {"chunk_id": "c1", "text": "Beamforming improves signal quality.", "source": "doc1.txt"},
+        {"chunk_id": "c2", "text": "DVB-S2 is used in satellite communication.", "source": "doc2.txt"},
+    ]
+    embeddings = np.asarray(
+        [
+            [1.0, 0.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0, 0.0],
+        ],
+        dtype="float32",
+    )
+    store = VectorStore(dim=embeddings.shape[1], device="cpu")
+    store.add(embeddings, metadata)
+    store.save(tmp_path)
+
+    restored = VectorStore.load(tmp_path, device="cpu")
+    assert restored.dim == store.dim
+    assert len(restored.metadata) == 2
+    assert restored.index_backend == "cpu"

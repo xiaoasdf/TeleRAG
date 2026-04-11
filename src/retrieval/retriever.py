@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Dict, List
 
 from src.retrieval.embedder import Embedder
@@ -37,3 +38,12 @@ class Retriever:
             formatted_results.append(result)
 
         return formatted_results
+
+    def save_index(self, output_dir: str | Path) -> None:
+        if self.vector_store is None:
+            raise ValueError("Index has not been built yet")
+        self.vector_store.save(output_dir)
+
+    def load_index(self, input_dir: str | Path) -> None:
+        self.vector_store = VectorStore.load(input_dir, device=self.device)
+        self.chunks = list(self.vector_store.metadata)

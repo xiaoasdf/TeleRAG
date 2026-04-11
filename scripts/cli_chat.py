@@ -1,22 +1,38 @@
-import os
-from src.pipeline.qa_pipeline import QAPipeline
+﻿import os
+
+from src.config import load_config
+from src.generation.llm_client import DEFAULT_LLM_MODEL
 from src.pipeline.index_pipeline import build_chunks_from_file
+from src.pipeline.qa_pipeline import QAPipeline
+
 
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 file_path = os.path.join(BASE_DIR, "data", "raw", "test.pdf")
+APP_CONFIG = load_config()
 
-pipeline = QAPipeline(llm_mode="hf")
+pipeline = QAPipeline(
+    model_name=APP_CONFIG.retriever_model,
+    llm_mode="hf",
+    llm_model_name=APP_CONFIG.default_llm_model or DEFAULT_LLM_MODEL,
+    reranker_model_name=APP_CONFIG.reranker_model,
+    enable_rerank=APP_CONFIG.enable_rerank,
+    candidate_k=APP_CONFIG.candidate_k,
+    rerank_top_n=APP_CONFIG.rerank_top_n,
+    prompt_char_budget=APP_CONFIG.prompt_char_budget,
+    max_new_tokens=APP_CONFIG.max_new_tokens,
+)
 
-chunks = build_chunks_from_file(file_path)
+chunks = build_chunks_from_file(file_path, chunk_size=APP_CONFIG.chunk_size, overlap=APP_CONFIG.overlap)
 pipeline.build_knowledge_base(chunks)
 
-while True:
-    query = input("\n请输入问题（exit退出）：")
+print(f"Knowledge base ready. The generator model will be loaded on first question: {pipeline.llm_client.model_name}")
 
+while True:
+    query = input("\n请输入问题（exit 退出）：")
     if query.lower() == "exit":
         break
 
-    result = pipeline.ask(query, top_k=3)
+    result = pipeline.ask(query, top_k=APP_CONFIG.top_k)
 
     print("\n" + "=" * 60)
     print("回答：")

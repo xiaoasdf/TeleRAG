@@ -3,7 +3,13 @@ from pathlib import Path
 
 import streamlit as st
 
-from src.generation.llm_client import DEFAULT_LLM_MODEL
+from src.config import load_config
+from src.generation.llm_client import (
+    BALANCED_LLM_MODEL,
+    DEFAULT_LLM_MODEL,
+    DEFAULT_MAX_NEW_TOKENS,
+    FAST_LLM_MODEL,
+)
 from src.pipeline.index_pipeline import build_chunks_from_file
 from src.pipeline.qa_pipeline import QAPipeline
 from src.runtime import get_compute_device
@@ -12,6 +18,13 @@ from src.runtime import get_compute_device
 def is_discouraged_model_name(model_name: str) -> bool:
     lowered = model_name.lower()
     return "mt5-base" in lowered or "t5-base" in lowered
+
+APP_CONFIG = load_config()
+MODEL_PRESETS = {
+    "快速": APP_CONFIG.fast_llm_model,
+    "平衡": APP_CONFIG.balanced_llm_model,
+    "自定义": None,
+}
 
 
 st.set_page_config(page_title="TeleRAG", page_icon="📚")
@@ -86,9 +99,19 @@ if "current_file" not in st.session_state:
 if "chunk_count" not in st.session_state:
     st.session_state.chunk_count = 0
 if "llm_model_name" not in st.session_state:
-    st.session_state.llm_model_name = DEFAULT_LLM_MODEL
+    st.session_state.llm_model_name = APP_CONFIG.default_llm_model
+if "model_preset" not in st.session_state:
+    st.session_state.model_preset = "平衡"
 if "last_result" not in st.session_state:
     st.session_state.last_result = None
+if "query_input" not in st.session_state:
+    st.session_state.query_input = ""
+if "last_submitted_query" not in st.session_state:
+    st.session_state.last_submitted_query = None
+if "enable_rerank" not in st.session_state:
+    st.session_state.enable_rerank = True
+if "max_new_tokens" not in st.session_state:
+    st.session_state.max_new_tokens = APP_CONFIG.max_new_tokens
 
 
 def save_uploaded_file(uploaded_file) -> str:
@@ -96,7 +119,6 @@ def save_uploaded_file(uploaded_file) -> str:
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp_file:
         tmp_file.write(uploaded_file.getvalue())
         return tmp_file.name
-
 
 with st.sidebar:
     st.header("文档导入")
@@ -106,14 +128,31 @@ with st.sidebar:
         type=["txt", "md", "pdf"],
     )
 
-    chunk_size = st.number_input("chunk_size", min_value=100, max_value=1000, value=300, step=50)
-    overlap = st.number_input("overlap", min_value=0, max_value=300, value=50, step=10)
-    top_k = st.slider("top_k", min_value=1, max_value=5, value=3)
-    llm_model_name = st.text_input(
-        "生成模型名称",
-        value=st.session_state.llm_model_name,
-        help="推荐使用指令微调模型，例如 Qwen/Qwen2.5-1.5B-Instruct，也支持本地模型目录。",
+    chunk_size = st.number_input("chunk_size", min_value=100, max_value=1000, value=APP_CONFIG.chunk_size, step=50)
+    overlap = st.number_input("overlap", min_value=0, max_value=300, value=APP_CONFIG.overlap, step=10)
+    top_k = st.slider("top_k", min_value=1, max_value=5, value=APP_CONFIG.top_k)
+    st.subheader("回答速度")
+    fast_mode = st.toggle("fast_mode", value=APP_CONFIG.default_llm_model == APP_CONFIG.fast_llm_model, help="开启后默认使用更轻量的生成模型。")
+    default_preset = "快速" if fast_mode else st.session_state.model_preset
+    model_preset = st.radio(
+        "模型档位",
+        options=list(MODEL_PRESETS.keys()),
+        index=list(MODEL_PRESETS.keys()).index(default_preset if default_preset in MODEL_PRESETS else "平衡"),
+        horizontal=True,
     )
+    preset_model_name = MODEL_PRESETS[model_preset]
+    if preset_model_name is not None:
+        llm_model_name = preset_model_name
+        st.caption(f"当前预设模型：`{llm_model_name}`")
+    else:
+        llm_model_name = st.text_input(
+            "自定义生成模型名称",
+            value=st.session_state.llm_model_name,
+            help="支持 HuggingFace 指令模型或本地模型目录。",
+        )
+
+    max_new_tokens = st.slider("max_new_tokens", min_value=32, max_value=256, value=st.session_state.max_new_tokens, step=16)
+    enable_rerank = st.toggle("启用 rerank", value=st.session_state.enable_rerank)
 
     if llm_model_name == DEFAULT_LLM_MODEL:
         st.caption("当前使用推荐模型。")
@@ -130,7 +169,11 @@ with st.sidebar:
         st.session_state.current_file = None
         st.session_state.chunk_count = 0
         st.session_state.llm_model_name = llm_model_name
+        st.session_state.model_preset = model_preset
+        st.session_state.enable_rerank = enable_rerank
+        st.session_state.max_new_tokens = max_new_tokens
         st.session_state.last_result = None
+        st.session_state.last_submitted_query = None
         st.success("知识库已清空。")
 
     if build_button:
@@ -140,7 +183,12 @@ with st.sidebar:
             try:
                 with st.spinner("正在解析文档并构建知识库..."):
                     temp_path = save_uploaded_file(uploaded_file)
-                    pipeline = QAPipeline(llm_mode="hf", llm_model_name=llm_model_name)
+                    pipeline = QAPipeline(
+                        llm_mode="hf",
+                        llm_model_name=llm_model_name,
+                        enable_rerank=enable_rerank,
+                        max_new_tokens=max_new_tokens,
+                    )
                     chunks = build_chunks_from_file(
                         temp_path,
                         chunk_size=chunk_size,
@@ -152,7 +200,11 @@ with st.sidebar:
                 st.session_state.current_file = uploaded_file.name
                 st.session_state.chunk_count = len(chunks)
                 st.session_state.llm_model_name = llm_model_name
+                st.session_state.model_preset = model_preset
+                st.session_state.enable_rerank = enable_rerank
+                st.session_state.max_new_tokens = max_new_tokens
                 st.session_state.last_result = None
+                st.session_state.last_submitted_query = None
 
                 st.success(f"知识库构建完成：{uploaded_file.name}")
                 st.info(f"共生成 {len(chunks)} 个 chunks。首次提问时才会加载生成模型。")
@@ -177,6 +229,8 @@ if st.session_state.current_file:
             f"<strong>当前知识库</strong>: {st.session_state.current_file} &nbsp;|&nbsp; "
             f"<strong>chunks</strong>: {st.session_state.chunk_count} &nbsp;|&nbsp; "
             f"<strong>LLM</strong>: {st.session_state.llm_model_name} &nbsp;|&nbsp; "
+            f"<strong>rerank</strong>: {'on' if st.session_state.enable_rerank else 'off'} &nbsp;|&nbsp; "
+            f"<strong>max_new_tokens</strong>: {st.session_state.max_new_tokens} &nbsp;|&nbsp; "
             f"<strong>Device</strong>: {device_label} &nbsp;|&nbsp; "
             f"<strong>FAISS</strong>: {vector_backend}"
             "</div>"
@@ -194,10 +248,11 @@ else:
         unsafe_allow_html=True,
     )
 
-with st.form("qa_form", clear_on_submit=False):
+with st.form("qa_form", clear_on_submit=True):
     query = st.text_input(
         "请输入你的问题：",
         placeholder="例如：what is beamforming / 什么是波束成形？",
+        key="query_input",
     )
     ask_button = st.form_submit_button("提问")
 
@@ -206,15 +261,48 @@ if ask_button:
         st.warning("请先上传文档并构建知识库。")
     elif not query.strip():
         st.warning("请输入问题。")
+    elif st.session_state.last_submitted_query == query.strip():
+        st.info("相同问题已经提交过。修改问题后再提交，避免重复执行。")
     else:
         try:
             with st.spinner("模型正在思考中..."):
-                st.session_state.last_result = st.session_state.pipeline.ask(query, top_k=top_k)
+                submitted_query = query.strip()
+                st.session_state.last_result = st.session_state.pipeline.ask(
+                    submitted_query,
+                    top_k=top_k,
+                    enable_rerank=enable_rerank,
+                    max_new_tokens=max_new_tokens,
+                )
+                st.session_state.last_submitted_query = submitted_query
         except Exception as e:
             st.error(f"提问失败：{e}")
 
 if st.session_state.last_result:
     result = st.session_state.last_result
+    timings = result.get("timings", {})
+    config = result.get("config", {})
+
+    with st.container(border=True):
+        st.markdown('<div class="section-title">性能</div>', unsafe_allow_html=True)
+        st.markdown(
+            (
+                f'<div class="meta-text">retrieve={timings.get("retrieve_ms", 0):.2f} ms | '
+                f'rerank={timings.get("rerank_ms", 0):.2f} ms | '
+                f'prompt={timings.get("prompt_ms", 0):.2f} ms | '
+                f'generate={timings.get("generate_ms", 0):.2f} ms | '
+                f'total={timings.get("total_ms", 0):.2f} ms</div>'
+            ),
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            (
+                f'<div class="meta-text">top_k={config.get("top_k", top_k)} | '
+                f'candidate_k={config.get("candidate_k", top_k)} | '
+                f'rerank={"on" if config.get("enable_rerank") else "off"} | '
+                f'max_new_tokens={config.get("max_new_tokens", max_new_tokens)}</div>'
+            ),
+            unsafe_allow_html=True,
+        )
 
     with st.container(border=True):
         st.markdown('<div class="section-title">回答</div>', unsafe_allow_html=True)
