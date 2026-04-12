@@ -7,7 +7,6 @@ set "CONDA_ENV_PREFIX=D:\conda_envs\telerag"
 set "CONDA_ENV_PYTHON=D:\conda_envs\telerag\python.exe"
 set "PYTHON_EXE="
 set "USE_CONDA_RUN="
-set "DASHSCOPE_API_KEY=sk-7cd212bb3a944270ad231b89293126ab"
 
 if defined CONDA_PREFIX (
     if exist "%CONDA_PREFIX%\python.exe" (

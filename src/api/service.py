@@ -174,7 +174,11 @@ class TeleRAGService:
             build_state["faiss_gpu_status"] = get_faiss_gpu_status()[1]
             if self.pipeline.retriever.vector_store:
                 build_state["index_backend"] = self.pipeline.retriever.vector_store.index_backend
-                build_state["index_backend_reason"] = self.pipeline.retriever.vector_store.index_backend_reason
+                build_state["index_backend_reason"] = getattr(
+                    self.pipeline.retriever.vector_store,
+                    "index_backend_reason",
+                    build_state.get("index_backend_reason"),
+                )
 
             if persist and (
                 build_state["processed_batches"] % save_every_batches == 0
@@ -192,7 +196,11 @@ class TeleRAGService:
 
         if self.pipeline.retriever.vector_store:
             build_state["index_backend"] = self.pipeline.retriever.vector_store.index_backend
-            build_state["index_backend_reason"] = self.pipeline.retriever.vector_store.index_backend_reason
+            build_state["index_backend_reason"] = getattr(
+                self.pipeline.retriever.vector_store,
+                "index_backend_reason",
+                build_state.get("index_backend_reason"),
+            )
         build_state["status"] = "completed"
         build_state["current_stage"] = "completed"
         build_state["processed_files"] = len(build_state.get("completed_files", []))

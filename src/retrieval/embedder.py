@@ -4,6 +4,11 @@ import numpy as np
 
 from src.runtime import get_compute_device
 
+try:
+    from sentence_transformers import SentenceTransformer
+except Exception:  # pragma: no cover
+    SentenceTransformer = None
+
 
 class Embedder:
     def __init__(self, model_name: str = "BAAI/bge-m3", device: str | None = None):
@@ -13,13 +18,11 @@ class Embedder:
 
     def _ensure_model_loaded(self) -> None:
         if self.model is None:
-            try:
-                from sentence_transformers import SentenceTransformer
-            except Exception as exc:  # pragma: no cover
+            if SentenceTransformer is None:  # pragma: no cover
                 raise RuntimeError(
                     "The 'sentence-transformers' package is required for retrieval embeddings. "
                     "Install retrieval dependencies before querying the local knowledge base."
-                ) from exc
+                )
 
             self.model = SentenceTransformer(self.model_name, device=self.device)
 

@@ -6,6 +6,11 @@ import numpy as np
 
 from src.runtime import faiss_supports_gpu, get_compute_device, get_faiss_gpu_status
 
+try:
+    import faiss as faiss
+except Exception:  # pragma: no cover
+    faiss = None
+
 
 class VectorStore:
     def __init__(self, dim: int, device: str | None = None):
@@ -130,12 +135,23 @@ class VectorStore:
 
 
 def _import_faiss():
-    try:
-        import faiss
-    except Exception as exc:  # pragma: no cover
+    global faiss
+
+    if faiss is None:
+        try:
+            import faiss as imported_faiss
+        except Exception as exc:  # pragma: no cover
+            raise RuntimeError(
+                "The 'faiss' package is required for the local vector store. "
+                "Install FAISS before loading or searching the persisted knowledge base."
+            ) from exc
+
+        faiss = imported_faiss
+
+    if faiss is None:  # pragma: no cover
         raise RuntimeError(
             "The 'faiss' package is required for the local vector store. "
             "Install FAISS before loading or searching the persisted knowledge base."
-        ) from exc
+        )
 
     return faiss

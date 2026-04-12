@@ -6,6 +6,19 @@ from pathlib import Path
 
 from src.runtime import get_compute_device
 
+try:
+    from transformers import (
+        AutoConfig,
+        AutoModelForCausalLM,
+        AutoModelForSeq2SeqLM,
+        AutoTokenizer,
+    )
+except Exception:  # pragma: no cover
+    AutoConfig = None
+    AutoModelForCausalLM = None
+    AutoModelForSeq2SeqLM = None
+    AutoTokenizer = None
+
 
 DEFAULT_LLM_MODEL = "Qwen/Qwen2.5-1.5B-Instruct"
 FAST_LLM_MODEL = "Qwen/Qwen2.5-0.5B-Instruct"
@@ -95,18 +108,26 @@ class LLMClient:
         self._is_loaded = True
 
     def _import_transformers(self):
-        try:
-            from transformers import (
-                AutoConfig,
-                AutoModelForCausalLM,
-                AutoModelForSeq2SeqLM,
-                AutoTokenizer,
-            )
-        except Exception as exc:  # pragma: no cover
-            raise RuntimeError(
-                "The 'transformers' package is required for local model generation. "
-                "Install local dependencies or switch to a compatible online API provider."
-            ) from exc
+        global AutoConfig, AutoModelForCausalLM, AutoModelForSeq2SeqLM, AutoTokenizer
+
+        if None in (AutoConfig, AutoModelForCausalLM, AutoModelForSeq2SeqLM, AutoTokenizer):
+            try:
+                from transformers import (
+                    AutoConfig as ImportedAutoConfig,
+                    AutoModelForCausalLM as ImportedAutoModelForCausalLM,
+                    AutoModelForSeq2SeqLM as ImportedAutoModelForSeq2SeqLM,
+                    AutoTokenizer as ImportedAutoTokenizer,
+                )
+            except Exception as exc:  # pragma: no cover
+                raise RuntimeError(
+                    "The 'transformers' package is required for local model generation. "
+                    "Install local dependencies or switch to a compatible online API provider."
+                ) from exc
+
+            AutoConfig = ImportedAutoConfig
+            AutoModelForCausalLM = ImportedAutoModelForCausalLM
+            AutoModelForSeq2SeqLM = ImportedAutoModelForSeq2SeqLM
+            AutoTokenizer = ImportedAutoTokenizer
 
         return AutoConfig, AutoModelForCausalLM, AutoModelForSeq2SeqLM, AutoTokenizer
 

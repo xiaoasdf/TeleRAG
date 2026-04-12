@@ -4,7 +4,7 @@ from src.generation.llm_client import DEFAULT_LLM_MODEL, LLMClient
 
 
 def test_llm_client_default_model_name():
-    assert LLMClient.__init__.__defaults__ == ("hf", DEFAULT_LLM_MODEL, 128, None)
+    assert LLMClient.__init__.__defaults__ == ("hf", DEFAULT_LLM_MODEL, 128, None, None, None)
 
 
 def test_llm_client_mock():

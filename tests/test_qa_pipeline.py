@@ -14,6 +14,9 @@ def test_qa_pipeline_default_models():
         3,
         1200,
         128,
+        "local",
+        None,
+        None,
     )
 
 

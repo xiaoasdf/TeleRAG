@@ -60,12 +60,6 @@ class IndexResponse(BaseModel):
     chunk_count: int
     persisted: bool
     vector_store_dir: str | None = None
-    backend: str = "local"
-    vector_store_id: str | None = None
-    cloud_state_path: str | None = None
-    uploaded_files: int | None = None
-    cloud_index_status: str | None = None
-    local_cleanup_applied: bool = False
 
 
 class StandardsIndexResponse(BaseModel):
@@ -74,12 +68,6 @@ class StandardsIndexResponse(BaseModel):
     persisted: bool
     vector_store_dir: str | None = None
     standards_root: str | None = None
-    backend: str = "local"
-    vector_store_id: str | None = None
-    cloud_state_path: str | None = None
-    uploaded_files: int | None = None
-    cloud_index_status: str | None = None
-    local_cleanup_applied: bool = False
     processed_sources: int
     new_or_updated_sources: int
     skipped_unchanged_sources: int

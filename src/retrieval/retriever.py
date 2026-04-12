@@ -29,7 +29,10 @@ class Retriever:
             return
 
         texts = [chunk["text"] for chunk in chunks]
-        embeddings = self.embedder.encode_texts(texts, batch_size=embedding_batch_size)
+        if embedding_batch_size is None:
+            embeddings = self.embedder.encode_texts(texts)
+        else:
+            embeddings = self.embedder.encode_texts(texts, batch_size=embedding_batch_size)
 
         if self.vector_store is None:
             self.vector_store = VectorStore(dim=embeddings.shape[1], device=self.device)

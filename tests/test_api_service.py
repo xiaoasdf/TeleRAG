@@ -44,6 +44,7 @@ def test_service_index_standards_builds_corpus(monkeypatch, tmp_path):
         def __init__(self, *args, **kwargs):
             self.is_ready = False
             self.saved_to = None
+            self.device = "cpu"
             self.retriever = type("Retriever", (), {"chunks": [], "vector_store": None})()
             self.llm_client = type("LLM", (), {"model_name": "fake-model"})()
 
@@ -87,7 +88,6 @@ def test_service_index_standards_builds_corpus(monkeypatch, tmp_path):
             "state_path": str(tmp_path / "data" / "raw" / "index_ready" / "standards_ingest_state.json"),
         },
     )
-    monkeypatch.setattr("src.api.service.compute_sha256", lambda path: f"hash-{Path(path).name}")
     monkeypatch.setattr(
         "src.api.service.build_chunks_from_file",
         lambda path, chunk_size, overlap: [{"chunk_id": Path(path).stem, "text": "wireless", "source": Path(path).name}],

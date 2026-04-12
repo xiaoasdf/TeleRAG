@@ -6,7 +6,7 @@ paths:
   data_dir: data
   raw_data_dir: data/raw
   vector_store_dir: data/vector_store/default
-  standards_source_dir: D:/project/pythoncrawler/downloads
+  standards_source_dir: data/raw/standards
 
 models:
   retriever: BAAI/bge-m3

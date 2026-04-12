@@ -126,7 +126,7 @@ TeleRAG 从一个本地可运行的技术文档 RAG Demo，逐步演进为一个
 完成内容：
 
 - 新增 `scripts/bootstrap.py`
-- 统一 `run_benchmark.py`、`run_api.py`、`cli_chat.py`、`build_index.py` 的入口行为
+- 统一 `run_benchmark.py`、`run_api.py`、`cli_chat.py` 的入口行为
 - 自动把项目根目录加入 `sys.path`
 - 统一脚本内的数据路径、输出路径和配置路径解析
 - 新增脚本入口测试 `tests/test_script_bootstrap.py`

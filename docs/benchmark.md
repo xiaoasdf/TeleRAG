@@ -31,6 +31,12 @@ Run the benchmark with:
 python scripts/run_benchmark.py
 ```
 
+The benchmark corpus is built from the repo-local sample documents under `data/raw/`:
+
+- `beamforming.pdf`
+- `wireless_systems_overview.md`
+- `communications_standards_notes.txt`
+
 Recommended comparisons:
 
 | Variant | Rerank | top_k | Goal |

@@ -18,7 +18,7 @@ class AppConfig:
     data_dir: str = "data"
     raw_data_dir: str = "data/raw"
     vector_store_dir: str = "data/vector_store/default"
-    standards_source_dir: str = "D:/project/pythoncrawler/downloads"
+    standards_source_dir: str = "data/raw/standards"
     retriever_model: str = "BAAI/bge-m3"
     reranker_model: str = "BAAI/bge-reranker-v2-m3"
     fast_llm_model: str = FAST_LLM_MODEL
@@ -51,7 +51,8 @@ class AppConfig:
 
     @property
     def standards_source_path(self) -> Path:
-        return _resolve_local_path(self.standards_source_dir)
+        env_override = os.getenv("TELERAG_STANDARDS_SOURCE_DIR")
+        return _resolve_local_path(env_override or self.standards_source_dir)
 
 def load_config(config_path: str | Path = "config/settings.yaml") -> AppConfig:
     path = Path(config_path)
@@ -75,7 +76,7 @@ def _flatten_settings(data: dict[str, Any]) -> dict[str, Any]:
         "data_dir": paths.get("data_dir", "data"),
         "raw_data_dir": paths.get("raw_data_dir", "data/raw"),
         "vector_store_dir": paths.get("vector_store_dir", "data/vector_store/default"),
-        "standards_source_dir": paths.get("standards_source_dir", "D:/project/pythoncrawler/downloads"),
+        "standards_source_dir": paths.get("standards_source_dir", "data/raw/standards"),
         "retriever_model": models.get("retriever", "BAAI/bge-m3"),
         "reranker_model": models.get("reranker", "BAAI/bge-reranker-v2-m3"),
         "fast_llm_model": models.get("fast_llm", FAST_LLM_MODEL),

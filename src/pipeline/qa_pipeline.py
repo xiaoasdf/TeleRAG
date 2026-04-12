@@ -5,7 +5,13 @@ from pathlib import Path
 from typing import Dict, List
 
 from src.generation.llm_client import DEFAULT_LLM_MODEL, DEFAULT_MAX_NEW_TOKENS, LLMClient
+from src.retrieval.retriever import Retriever
 from src.runtime import get_compute_device
+
+try:
+    from src.retrieval.reranker import Reranker
+except Exception:  # pragma: no cover
+    Reranker = None
 
 
 class QAPipeline:
@@ -37,8 +43,6 @@ class QAPipeline:
         self.compatible_api_key_env = compatible_api_key_env
         self.compatible_base_url = compatible_base_url
         self.is_ready = False
-
-        from src.retrieval.retriever import Retriever
 
         self.retriever = Retriever(model_name=model_name, device=self.device)
         self.reranker = None
@@ -180,13 +184,18 @@ class QAPipeline:
 
     def _build_llm_client(self, *, llm_mode: str | None, llm_model_name: str) -> LLMClient:
         effective_mode = llm_mode or ("openai_compatible" if self.generation_backend == "dashscope_compatible" else "hf")
+        client_kwargs = {
+            "mode": effective_mode,
+            "model_name": llm_model_name,
+            "max_new_tokens": self.max_new_tokens,
+            "device": self.device,
+        }
+        if self.compatible_api_key_env is not None:
+            client_kwargs["api_key_env"] = self.compatible_api_key_env
+        if self.compatible_base_url is not None:
+            client_kwargs["base_url"] = self.compatible_base_url
         return LLMClient(
-            mode=effective_mode,
-            model_name=llm_model_name,
-            max_new_tokens=self.max_new_tokens,
-            device=self.device,
-            api_key_env=self.compatible_api_key_env,
-            base_url=self.compatible_base_url,
+            **client_kwargs,
         )
 
     def _select_prompt_contexts(self, contexts: List[Dict]) -> List[Dict]:
@@ -227,8 +236,8 @@ class QAPipeline:
             return contexts
 
         if self.reranker is None:
-            from src.retrieval.reranker import Reranker
-
+            if Reranker is None:  # pragma: no cover
+                raise RuntimeError("Reranker dependencies are not available.")
             self.reranker = Reranker(model_name=self.reranker_model_name, device=self.device)
 
         rerank_limit = min(len(contexts), self.rerank_top_n)
