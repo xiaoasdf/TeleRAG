@@ -17,12 +17,25 @@ class Retriever:
         if not chunks:
             raise ValueError("Chunks cannot be empty")
 
-        self.chunks = chunks
-        texts = [chunk["text"] for chunk in chunks]
-        embeddings = self.embedder.encode_texts(texts)
+        self.start_index()
+        self.add_chunks(chunks)
 
-        self.vector_store = VectorStore(dim=embeddings.shape[1], device=self.device)
+    def start_index(self) -> None:
+        self.vector_store = None
+        self.chunks = []
+
+    def add_chunks(self, chunks: List[Dict], embedding_batch_size: int | None = None) -> None:
+        if not chunks:
+            return
+
+        texts = [chunk["text"] for chunk in chunks]
+        embeddings = self.embedder.encode_texts(texts, batch_size=embedding_batch_size)
+
+        if self.vector_store is None:
+            self.vector_store = VectorStore(dim=embeddings.shape[1], device=self.device)
+
         self.vector_store.add(embeddings, chunks)
+        self.chunks.extend(chunks)
 
     def retrieve(self, query: str, top_k: int = 3) -> List[Dict]:
         if self.vector_store is None:

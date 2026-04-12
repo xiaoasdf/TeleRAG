@@ -2,19 +2,20 @@
 
 ## Goal
 
-This benchmark is designed to make TeleRAG interview-ready for LLM engineering roles by turning the project into a measurable system instead of a UI-only demo.
+This benchmark is designed to make TeleRAG interview-ready as a communications-domain LLM engineering project by turning the system into a measurable knowledge assistant instead of a UI-only demo.
 
 ## Dataset
 
-- Location: `data/eval/beamforming_eval.json`
+- Location: `data/eval/communications_eval.json`
 - Format:
   - `question`
   - `source_doc`
   - `expected_keywords`
 - Current scope:
-  - definition-style questions
-  - bilingual questions
-  - document-source verification
+  - wireless concept questions
+  - bilingual beamforming questions
+  - standards-organization verification
+  - small-note source verification
 
 ## Metrics
 
@@ -50,7 +51,7 @@ Use the latest run to populate a resume-friendly table like this:
 
 ## How To Present This In Interviews
 
-- Start with the problem: technical-document QA with traceable sources.
+- Start with the problem: communications knowledge QA with traceable sources.
 - Explain the architecture: chunking -> embedding retrieval -> optional rerank -> answer generation -> answer cleanup.
 - Show the tradeoff: rerank improves relevance but increases latency.
 - Quote one or two measured metrics from `benchmark_results.json`.

@@ -1,14 +1,8 @@
 ﻿from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
-
-from transformers import (
-    AutoConfig,
-    AutoModelForCausalLM,
-    AutoModelForSeq2SeqLM,
-    AutoTokenizer,
-)
 
 from src.runtime import get_compute_device
 
@@ -34,16 +28,21 @@ class LLMClient:
         model_name: str = DEFAULT_LLM_MODEL,
         max_new_tokens: int = DEFAULT_MAX_NEW_TOKENS,
         device: str | None = None,
+        api_key_env: str | None = None,
+        base_url: str | None = None,
     ):
         self.mode = mode
         self.model_name = model_name
         self.max_new_tokens = max_new_tokens
         self.device = device or get_compute_device()
+        self.api_key_env = api_key_env
+        self.base_url = base_url
         self.tokenizer = None
         self.model = None
         self.config = None
         self.model_kind = None
         self._is_loaded = False
+        self._remote_client = None
 
     def generate(self, prompt: str) -> str:
         if not prompt.strip():
@@ -51,6 +50,8 @@ class LLMClient:
 
         if self.mode == "hf":
             return self._hf_generate(prompt)
+        if self.mode == "openai_compatible":
+            return self._openai_compatible_generate(prompt)
         if self.mode == "mock":
             return "This is a mock answer used for testing."
 
@@ -59,6 +60,8 @@ class LLMClient:
     def _ensure_hf_model_loaded(self) -> None:
         if self._is_loaded:
             return
+
+        AutoConfig, AutoModelForCausalLM, AutoModelForSeq2SeqLM, AutoTokenizer = self._import_transformers()
 
         try:
             self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
@@ -90,6 +93,22 @@ class LLMClient:
             self.model = self.model.to(self.device)
 
         self._is_loaded = True
+
+    def _import_transformers(self):
+        try:
+            from transformers import (
+                AutoConfig,
+                AutoModelForCausalLM,
+                AutoModelForSeq2SeqLM,
+                AutoTokenizer,
+            )
+        except Exception as exc:  # pragma: no cover
+            raise RuntimeError(
+                "The 'transformers' package is required for local model generation. "
+                "Install local dependencies or switch to a compatible online API provider."
+            ) from exc
+
+        return AutoConfig, AutoModelForCausalLM, AutoModelForSeq2SeqLM, AutoTokenizer
 
     def _is_causal_lm_config(self) -> bool:
         architectures = getattr(self.config, "architectures", []) or []
@@ -208,6 +227,61 @@ class LLMClient:
             return "Unable to answer from the provided context."
 
         return cleaned
+
+    def _openai_compatible_generate(self, prompt: str) -> str:
+        client = self._get_openai_compatible_client()
+        try:
+            response = client.responses.create(
+                model=self.model_name,
+                input=prompt,
+                max_output_tokens=self.max_new_tokens,
+            )
+            answer = getattr(response, "output_text", None)
+            if not answer:
+                payload = response.model_dump() if hasattr(response, "model_dump") else {}
+                answer = self._extract_output_text(payload)
+            return self._clean_answer(answer or "", prompt)
+        except Exception as exc:
+            raise RuntimeError(
+                f"Compatible API generation failed for '{self.model_name}'. "
+                f"Check your API key, base_url, quota, and provider availability. Original error: {exc}"
+            ) from exc
+
+    def _get_openai_compatible_client(self):
+        if self._remote_client is not None:
+            return self._remote_client
+
+        if not self.api_key_env:
+            raise RuntimeError("Missing api_key_env for openai_compatible mode")
+
+        api_key = os.getenv(self.api_key_env)
+        if not api_key:
+            raise RuntimeError(f"Missing API key environment variable: {self.api_key_env}")
+
+        try:
+            from openai import OpenAI
+        except Exception as exc:  # pragma: no cover
+            raise RuntimeError("The 'openai' package is required for compatible API generation.") from exc
+
+        client_kwargs = {"api_key": api_key}
+        if self.base_url:
+            client_kwargs["base_url"] = self.base_url
+        self._remote_client = OpenAI(**client_kwargs)
+        return self._remote_client
+
+    def _extract_output_text(self, payload: dict) -> str:
+        output_text = payload.get("output_text")
+        if isinstance(output_text, str) and output_text.strip():
+            return output_text
+
+        parts = []
+        for item in payload.get("output", []):
+            if item.get("type") != "message":
+                continue
+            for content in item.get("content", []):
+                if content.get("type") == "output_text" and content.get("text"):
+                    parts.append(content["text"])
+        return "\n".join(parts).strip()
 
     def _remove_prompt_artifacts(self, text: str) -> str:
         markers = [

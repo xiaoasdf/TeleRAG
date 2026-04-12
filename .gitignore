@@ -205,3 +205,15 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# TeleRAG downloaded corpora
+data/raw/standards/3gpp/
+data/raw/standards/itu/
+data/raw/standards/download_manifest.json
+
+# TeleRAG generated artifacts
+data/vector_store/
+data/raw/index_ready/
+data/cloud/
+.codex
+.idea/workspace.xml

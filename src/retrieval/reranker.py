@@ -1,5 +1,3 @@
-from sentence_transformers import CrossEncoder
-
 from src.runtime import get_compute_device
 
 
@@ -11,6 +9,14 @@ class Reranker:
 
     def _ensure_model_loaded(self) -> None:
         if self.model is None:
+            try:
+                from sentence_transformers import CrossEncoder
+            except Exception as exc:  # pragma: no cover
+                raise RuntimeError(
+                    "The 'sentence-transformers' package is required for reranking. "
+                    "Install retrieval dependencies or disable rerank."
+                ) from exc
+
             self.model = CrossEncoder(self.model_name, device=self.device)
 
     def rerank(self, query, docs):

@@ -1,0 +1,86 @@
+[
+  {
+    "name": "3gpp_rel18_38_series",
+    "source_org": "3GPP",
+    "kind": "directory",
+    "url": "https://www.3gpp.org/ftp/specs/2025-12/Rel-18/38_series",
+    "destination_dir": "standards/3gpp/rel18/38_series",
+    "file_suffixes": [
+      ".zip"
+    ],
+    "release": "Rel-18",
+    "series": "38_series"
+  },
+  {
+    "name": "3gpp_rel18_33_series",
+    "source_org": "3GPP",
+    "kind": "directory",
+    "url": "https://www.3gpp.org/ftp/specs/2025-12/Rel-18/33_series",
+    "destination_dir": "standards/3gpp/rel18/33_series",
+    "file_suffixes": [
+      ".zip"
+    ],
+    "release": "Rel-18",
+    "series": "33_series"
+  },
+  {
+    "name": "3gpp_rel18_23_series",
+    "source_org": "3GPP",
+    "kind": "directory",
+    "url": "https://www.3gpp.org/ftp/specs/2025-12/Rel-18/23_series",
+    "destination_dir": "standards/3gpp/rel18/23_series",
+    "file_suffixes": [
+      ".zip"
+    ],
+    "release": "Rel-18",
+    "series": "23_series"
+  },
+  {
+    "name": "3gpp_rel18_24_series",
+    "source_org": "3GPP",
+    "kind": "directory",
+    "url": "https://www.3gpp.org/ftp/specs/2025-12/Rel-18/24_series",
+    "destination_dir": "standards/3gpp/rel18/24_series",
+    "file_suffixes": [
+      ".zip"
+    ],
+    "release": "Rel-18",
+    "series": "24_series"
+  },
+  {
+    "name": "3gpp_rel18_29_series",
+    "source_org": "3GPP",
+    "kind": "directory",
+    "url": "https://www.3gpp.org/ftp/specs/2025-12/Rel-18/29_series",
+    "destination_dir": "standards/3gpp/rel18/29_series",
+    "file_suffixes": [
+      ".zip"
+    ],
+    "release": "Rel-18",
+    "series": "29_series"
+  },
+  {
+    "name": "itu_r_p1239",
+    "source_org": "ITU-R",
+    "kind": "file",
+    "url": "https://www.itu.int/dms_pubrec/itu-r/rec/p/R-REC-P.1239-0-199705-S!!PDF-E.pdf",
+    "destination_dir": "standards/itu/itu-r",
+    "filename": "ITU-R_P.1239-0.pdf"
+  },
+  {
+    "name": "itu_r_p1240",
+    "source_org": "ITU-R",
+    "kind": "file",
+    "url": "https://www.itu.int/dms_pubrec/itu-r/rec/p/R-REC-P.1240-0-199705-S!!PDF-E.pdf",
+    "destination_dir": "standards/itu/itu-r",
+    "filename": "ITU-R_P.1240-0.pdf"
+  },
+  {
+    "name": "itu_r_m2083",
+    "source_org": "ITU-R",
+    "kind": "file",
+    "url": "https://www.itu.int/dms_pubrec/itu-r/rec/m/R-REC-M.2083-0-201509-I!!PDF-E.pdf",
+    "destination_dir": "standards/itu/itu-r",
+    "filename": "ITU-R_M.2083-0.pdf"
+  }
+]

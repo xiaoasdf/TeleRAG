@@ -4,7 +4,12 @@ import json
 import statistics
 from pathlib import Path
 
+from bootstrap import ensure_project_root_on_path
+
+PROJECT_ROOT = ensure_project_root_on_path()
+
 from src.api.service import TeleRAGService
+from src.pipeline.index_pipeline import build_chunks_from_file
 
 
 def keyword_hit(answer: str, expected_keywords: list[str]) -> float:
@@ -41,13 +46,33 @@ def run_suite(service: TeleRAGService, dataset: list[dict], enable_rerank: bool,
     }
 
 
+def build_benchmark_corpus(service: TeleRAGService) -> list[str]:
+    source_paths = [
+        PROJECT_ROOT / "data" / "raw" / "beamforming.pdf",
+        PROJECT_ROOT / "data" / "raw" / "wireless_systems_overview.md",
+        PROJECT_ROOT / "data" / "raw" / "communications_standards_notes.txt",
+    ]
+    all_chunks = []
+    for path in source_paths:
+        all_chunks.extend(
+            build_chunks_from_file(
+                str(path),
+                chunk_size=service.config.chunk_size,
+                overlap=service.config.overlap,
+            )
+        )
+
+    service.pipeline.build_knowledge_base(all_chunks)
+    service.chunk_count = len(all_chunks)
+    return [path.name for path in source_paths]
+
+
 def main() -> None:
-    dataset_path = Path("data/eval/beamforming_eval.json")
+    dataset_path = PROJECT_ROOT / "data" / "eval" / "communications_eval.json"
     dataset = json.loads(dataset_path.read_text(encoding="utf-8"))
 
     service = TeleRAGService()
-    if not service.pipeline.is_ready:
-        service.index_document("data/raw/test.pdf", persist=True)
+    source_docs = build_benchmark_corpus(service)
 
     runs = [
         run_suite(service, dataset, enable_rerank=False, top_k=2),
@@ -56,9 +81,10 @@ def main() -> None:
 
     output = {
         "dataset_size": len(dataset),
+        "source_docs": source_docs,
         "runs": runs,
     }
-    output_path = Path("docs/benchmark_results.json")
+    output_path = PROJECT_ROOT / "docs" / "benchmark_results.json"
     output_path.write_text(json.dumps(output, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(output, ensure_ascii=False, indent=2))
 

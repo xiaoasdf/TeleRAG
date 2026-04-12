@@ -84,3 +84,12 @@ def test_vector_store_save_and_load(tmp_path):
     assert restored.dim == store.dim
     assert len(restored.metadata) == 2
     assert restored.index_backend == "cpu"
+
+
+def test_vector_store_supports_multiple_adds():
+    store = VectorStore(dim=2, device="cpu")
+
+    store.add(np.asarray([[1.0, 0.0]], dtype="float32"), [{"chunk_id": "c1", "text": "one", "source": "a.txt"}])
+    store.add(np.asarray([[0.0, 1.0]], dtype="float32"), [{"chunk_id": "c2", "text": "two", "source": "b.txt"}])
+
+    assert len(store.metadata) == 2

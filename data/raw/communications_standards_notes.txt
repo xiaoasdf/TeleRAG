@@ -1,0 +1,3 @@
+3GPP and ITU are both important organizations in communications standards work.
+3GPP specifications define mobile system architecture, radio access, signaling, and security.
+ITU recommendations cover radio propagation, spectrum, and broader telecommunication standards.

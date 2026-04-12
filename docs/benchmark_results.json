@@ -1,0 +1,19 @@
+{
+  "dataset_size": 4,
+  "runs": [
+    {
+      "enable_rerank": false,
+      "top_k": 2,
+      "retrieval_hit_rate": 0.5,
+      "answer_keyword_coverage": 0.25,
+      "avg_total_ms": 3999.7
+    },
+    {
+      "enable_rerank": true,
+      "top_k": 3,
+      "retrieval_hit_rate": 0.5,
+      "answer_keyword_coverage": 0.3333,
+      "avg_total_ms": 5007.6
+    }
+  ]
+}

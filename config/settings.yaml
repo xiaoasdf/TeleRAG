@@ -1,10 +1,12 @@
 app:
-  project_name: TeleRAG
+  project_name: TeleRAG Communications Knowledge Assistant
+  rag_provider: dashscope_compatible
 
 paths:
   data_dir: data
   raw_data_dir: data/raw
   vector_store_dir: data/vector_store/default
+  standards_source_dir: D:/project/pythoncrawler/downloads
 
 models:
   retriever: BAAI/bge-m3
@@ -12,6 +14,9 @@ models:
   fast_llm: Qwen/Qwen2.5-0.5B-Instruct
   balanced_llm: Qwen/Qwen2.5-1.5B-Instruct
   default_llm: Qwen/Qwen2.5-0.5B-Instruct
+  dashscope_api_key_env: DASHSCOPE_API_KEY
+  dashscope_base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+  dashscope_model: qwen-plus
 
 pipeline:
   chunk_size: 300
@@ -20,5 +25,10 @@ pipeline:
   candidate_k: 5
   rerank_top_n: 3
   prompt_char_budget: 1200
-  enable_rerank: true
+  enable_rerank: false
   max_new_tokens: 128
+  embedding_batch_size: 16
+  standards_batch_files: 10
+  standards_save_every_batches: 2
+  standards_resume_enabled: true
+  prefer_faiss_gpu: true

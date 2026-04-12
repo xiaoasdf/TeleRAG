@@ -1,7 +1,6 @@
 from typing import List
 
 import numpy as np
-from sentence_transformers import SentenceTransformer
 
 from src.runtime import get_compute_device
 
@@ -14,14 +13,25 @@ class Embedder:
 
     def _ensure_model_loaded(self) -> None:
         if self.model is None:
+            try:
+                from sentence_transformers import SentenceTransformer
+            except Exception as exc:  # pragma: no cover
+                raise RuntimeError(
+                    "The 'sentence-transformers' package is required for retrieval embeddings. "
+                    "Install retrieval dependencies before querying the local knowledge base."
+                ) from exc
+
             self.model = SentenceTransformer(self.model_name, device=self.device)
 
-    def encode_texts(self, texts: List[str]) -> np.ndarray:
+    def encode_texts(self, texts: List[str], batch_size: int | None = None) -> np.ndarray:
         """
         批量编码文本
         """
         self._ensure_model_loaded()
-        embeddings = self.model.encode(texts, normalize_embeddings=True)
+        encode_kwargs = {"normalize_embeddings": True}
+        if batch_size is not None:
+            encode_kwargs["batch_size"] = batch_size
+        embeddings = self.model.encode(texts, **encode_kwargs)
         return embeddings
 
     def encode_query(self, query: str) -> np.ndarray:

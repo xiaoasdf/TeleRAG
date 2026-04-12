@@ -1,0 +1,26 @@
+[
+  {
+    "id": "beamforming_definition",
+    "source_doc": "beamforming.pdf",
+    "question": "What is beamforming?",
+    "expected_keywords": ["signal", "direction", "array"]
+  },
+  {
+    "id": "beamforming_chinese",
+    "source_doc": "beamforming.pdf",
+    "question": "什么是波束成形？",
+    "expected_keywords": ["波束", "方向", "信号"]
+  },
+  {
+    "id": "wireless_overview_topics",
+    "source_doc": "wireless_systems_overview.md",
+    "question": "What topics are summarized in the wireless systems overview note?",
+    "expected_keywords": ["mimo", "ofdm", "channel"]
+  },
+  {
+    "id": "standards_note_orgs",
+    "source_doc": "communications_standards_notes.txt",
+    "question": "Which standards organizations are mentioned in the communications standards note?",
+    "expected_keywords": ["3gpp", "itu", "standards"]
+  }
+]

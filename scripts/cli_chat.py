@@ -1,13 +1,17 @@
 ﻿import os
 
+from bootstrap import ensure_project_root_on_path
+
+PROJECT_ROOT = ensure_project_root_on_path()
+
 from src.config import load_config
 from src.generation.llm_client import DEFAULT_LLM_MODEL
 from src.pipeline.index_pipeline import build_chunks_from_file
 from src.pipeline.qa_pipeline import QAPipeline
 
 
-BASE_DIR = os.path.dirname(os.path.dirname(__file__))
-file_path = os.path.join(BASE_DIR, "data", "raw", "test.pdf")
+BASE_DIR = str(PROJECT_ROOT)
+file_path = os.path.join(BASE_DIR, "data", "raw", "beamforming.pdf")
 APP_CONFIG = load_config()
 
 pipeline = QAPipeline(
@@ -25,7 +29,9 @@ pipeline = QAPipeline(
 chunks = build_chunks_from_file(file_path, chunk_size=APP_CONFIG.chunk_size, overlap=APP_CONFIG.overlap)
 pipeline.build_knowledge_base(chunks)
 
-print(f"Knowledge base ready. The generator model will be loaded on first question: {pipeline.llm_client.model_name}")
+print("TeleRAG communications knowledge base ready.")
+print(f"Generator model will be loaded on first question: {pipeline.llm_client.model_name}")
+print("Suggested queries: What is beamforming? / Explain MIMO. / Which standards organizations are covered?")
 
 while True:
     query = input("\n请输入问题（exit 退出）：")

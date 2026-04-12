@@ -4,7 +4,15 @@ import logging
 
 from fastapi import FastAPI, HTTPException
 
-from src.api.schemas import HealthResponse, IndexRequest, IndexResponse, QueryRequest, QueryResponse
+from src.api.schemas import (
+    HealthResponse,
+    IndexRequest,
+    IndexResponse,
+    QueryRequest,
+    QueryResponse,
+    StandardsIndexRequest,
+    StandardsIndexResponse,
+)
 from src.api.service import TeleRAGService
 
 
@@ -13,7 +21,7 @@ logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
 )
 
-app = FastAPI(title="TeleRAG API", version="1.0.0")
+app = FastAPI(title="TeleRAG Communications API", version="1.0.0")
 service = TeleRAGService()
 
 
@@ -25,8 +33,11 @@ def health() -> HealthResponse:
 @app.post("/index", response_model=IndexResponse)
 def index_document(payload: IndexRequest) -> IndexResponse:
     try:
+        file_paths = payload.file_paths or ([payload.file_path] if payload.file_path else None)
+        if not file_paths:
+            raise HTTPException(status_code=400, detail="Either file_path or file_paths must be provided.")
         result = service.index_document(
-            file_path=payload.file_path,
+            file_paths=file_paths,
             chunk_size=payload.chunk_size,
             overlap=payload.overlap,
             persist=payload.persist,
@@ -38,6 +49,22 @@ def index_document(payload: IndexRequest) -> IndexResponse:
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Index build failed: {exc}") from exc
     return IndexResponse(**result)
+
+
+@app.post("/index/standards", response_model=StandardsIndexResponse)
+def index_standards(payload: StandardsIndexRequest) -> StandardsIndexResponse:
+    try:
+        result = service.index_standards(
+            download_first=payload.download_first,
+            source_orgs=payload.source_orgs,
+            limit=payload.limit,
+            persist=payload.persist,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Standards index build failed: {exc}") from exc
+    return StandardsIndexResponse(**result)
 
 
 @app.post("/query", response_model=QueryResponse)

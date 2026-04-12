@@ -1,3 +1,7 @@
+from bootstrap import ensure_project_root_on_path
+
+ensure_project_root_on_path()
+
 import uvicorn
 
 
